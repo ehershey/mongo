@@ -26,7 +26,8 @@ def push_tag( bucket , tag , extension , gzip=False ):
         remoteName += ".gz"
     for ( key , modify , etag , size ) in bucket.listdir( prefix=remoteName ):
         print( "found old: " + key + " uploaded on: " + str( modify ) )
-        return
+        if "r2.2.5." not in key:
+          return
     
     if os.path.exists( localName ):
         os.remove( localName )

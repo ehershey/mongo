@@ -29,7 +29,7 @@ def check_dir( bucket , prefix ):
             
     for x in zips:
         m = x + ".md5"
-        if m in md5s:
+        if m in md5s and "2.2.5" not in x:
             continue
 
         print( "need to do: " + x + " " + zips[x] + " to " + m )
