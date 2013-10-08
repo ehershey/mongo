@@ -7,7 +7,7 @@ Summary: MongoDB Enterprise server, shell, sharding server and tools
 License: AGPL 3.0
 URL: http://www.mongodb.org
 Group: Applications/Databases
-Requires: mongodb-org-unstable-server, mongodb-org-unstable-shell, mongodb-org-unstable-mongos, mongodb-org-unstable-tools
+Requires: mongodb-enterprise-unstable-server, mongodb-enterprise-unstable-shell, mongodb-enterprise-unstable-mongos, mongodb-enterprise-unstable-tools
 
 Source0: %{name}-%{version}.tar.gz
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-root
