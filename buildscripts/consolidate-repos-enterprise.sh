@@ -65,9 +65,13 @@ echo
 for debian_dir in "$repodir"/ubuntu-* "$repodir"/debian-* 
 do
   cd "$debian_dir" 
-  for arch_dir in dists/dist/10gen/*   
+  for arch_dir in dists/dist/10gen/{binary_i386,binary_amd64}
   do
     echo "Generating Packages file under $debian_dir/$arch_dir"
+    if [ ! -d $arch_dir ]
+    then
+      mkdir $arch_dir
+    fi
     dpkg-scanpackages --multiversion "$arch_dir"   > "$arch_dir"/Packages
     gzip -9c  "$arch_dir"/Packages >  "$arch_dir"/Packages.gz
   done
