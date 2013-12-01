@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # consolidate-repos-enterprise.sh
 #
@@ -65,7 +65,7 @@ echo
 for debian_dir in "$repodir"/ubuntu-* "$repodir"/debian-* 
 do
   cd "$debian_dir" 
-  for arch_dir in dists/dist/10gen/{binary_i386,binary_amd64}
+  for arch_dir in dists/dist/10gen/{binary-i386,binary-amd64}
   do
     echo "Generating Packages file under $debian_dir/$arch_dir"
     if [ ! -d $arch_dir ]
