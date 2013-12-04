@@ -126,7 +126,7 @@ class Distro(object):
         else:
             raise Exception("BUG: unsupported platform?")
 
-    def repodir(self, arch):
+    def repodir(self, arch, build_os):
         """Return the directory where we'll place the package files for
         (distro, distro_version) in that distro's preferred repository
         layout (as distinct from where that distro's packaging building
@@ -134,7 +134,7 @@ class Distro(object):
         if re.search("^(debian|ubuntu)", self.n):
             return "repo/%s/dists/dist/mongodb/binary-%s/" % (self.n, self.archname(arch))
         elif re.search("(redhat|fedora|centos)", self.n):
-            return "repo/%s/os/%s/RPMS/" % (self.n, self.archname(arch))
+            return "repo/%s/os/%s/%s/RPMS/" % (self.n, build_os, self.archname(arch))
         else:
             raise Exception("BUG: unsupported platform?")
     
@@ -379,7 +379,7 @@ def make_deb(distro, build_os, arch, spec, srcdir):
         sysassert(["dpkg-buildpackage", "-a"+distro_arch, "-k Richard Kreuter <richard@10gen.com>"])
     finally:
         os.chdir(oldcwd)
-    r=distro.repodir(arch)
+    r=distro.repodir(arch, build_os)
     ensure_dir(r)
     # FIXME: see if shutil.copyfile or something can do this without
     # much pain.
@@ -595,7 +595,7 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
         os.chdir(oldcwd)
     # Do the build.
     sysassert(["rpmbuild", "-ba", "--target", distro_arch] + flags + ["%s/SPECS/mongodb%s.spec" % (topdir, suffix)])
-    r=distro.repodir(arch)
+    r=distro.repodir(arch, build_os)
     ensure_dir(r)
     # FIXME: see if some combination of shutil.copy<hoohah> and glob
     # can do this without shelling out.
