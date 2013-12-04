@@ -152,7 +152,7 @@ class Distro(object):
         for redhat, "ubuntu1204" for Ubuntu and Debian)"""
 
         if re.search("^(debian|ubuntu)", self.n):
-            return "ubuntu1204"
+            return [ "ubuntu1204" ]
         elif re.search("(redhat|fedora|centos)", self.n):
             return [ "rhel57", "rhel62" ]
         else:
