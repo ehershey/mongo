@@ -93,7 +93,7 @@ do
   done
 done
 
-for redhat_dir in "$repodir"/redhat/os/*
+for redhat_dir in $(find "$repodir"/redhat -name x86_64 -o -name i386)
 do
   echo "Generating redhat repo metadata under $redhat_dir"
   cd "$redhat_dir"
