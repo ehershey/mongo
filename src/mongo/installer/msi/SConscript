@@ -56,7 +56,7 @@ env.Command(objects,
             r' -dEnterpriseBase=' + enterprisebase + '\\'
             ' -dBinarySource=' + buildDir + r'\mongo'
             ' -dMergeModulesBasePath="$MERGEMODULESBASEPATH"'
-            ' -dEdition=Enterprise'
+            ' -dEdition=' + edition +
             ' -d"ProductId=*\"'
             ' -dUpgradeCode=FCF901F6-E963-40B1-9A17-978242068587'
             ' -dClientSource=' + buildDir + r'\client_build'
