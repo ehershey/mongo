@@ -74,8 +74,8 @@ env.Command(objects,
             r' -dClientHeaderSource=${INSTALL_DIR}\include\mongo'
             ' -dConfiguration=Release'
             ' -dOutDir=' + buildDir + r'\msi'
-            ' -dPlatform=' + platform
-            ' -dFlavor=' + flavor
+            ' -dPlatform=' + platform +
+            ' -dFlavor=' + flavor +
             r' -dProjectDir=buildscripts\packaging\msi\\'
             ' -dProjectName=MongoDB'
             ' -dTargetDir=' + buildDir + r'\msi'
@@ -85,7 +85,7 @@ env.Command(objects,
             r' -dSnmpSource=c:\snmp\bin'
             r' -dSslSource=c:\openssl\bin'
             ' -out ' + buildDir + r'\msi\\'
-            ' -arch ' + arch
+            ' -arch ' + arch +
             ' -ext "$WIXUIEXT"'
             ' $SOURCES')
 
