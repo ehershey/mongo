@@ -42,6 +42,20 @@ env.AlwaysBuild(driverIncludeSource)
 # Need to do this in order to get scons to translate path separators into native format
 buildDir = Dir(env["BUILD_DIR"]).path
 
+enterprisebase = 'src\mongo\db\modules\enterprise'
+
+if os.path.exists(enterprisebase):
+  edition = 'Enterprise'
+  flavor = '2008R2Plus'
+  platform = 'x64'
+  arch = 'x64'
+else:
+  edition = 'Standard'
+  flavor = '2008R2Plus'
+  platform = 'x64'
+  arch = 'x64'
+
+
 # candle: compile .wxs files into .wixobjs
 env.Command(objects, 
             sources,
@@ -50,7 +64,7 @@ env.Command(objects,
             # we should choose a fourth version number that reflects pre-ness.
             ' -dMongoDBVersion=' + mongoCodeVersion.partition('-')[0] +
             ' -dLicenseSource=distsrc'
-            r' -dEnterpriseBase=src\mongo\db\modules\enterprise\\'
+            r' -dEnterpriseBase=' + enterprisebase + '\\'
             ' -dBinarySource=' + buildDir + r'\mongo'
             ' -dMergeModulesBasePath="$MERGEMODULESBASEPATH"'
             ' -dEdition=Enterprise'
@@ -60,8 +74,8 @@ env.Command(objects,
             r' -dClientHeaderSource=${INSTALL_DIR}\include\mongo'
             ' -dConfiguration=Release'
             ' -dOutDir=' + buildDir + r'\msi'
-            ' -dPlatform=x64'
-            ' -dFlavor=2008R2Plus'
+            ' -dPlatform=' + platform
+            ' -dFlavor=' + flavor
             r' -dProjectDir=buildscripts\packaging\msi\\'
             ' -dProjectName=MongoDB'
             ' -dTargetDir=' + buildDir + r'\msi'
@@ -71,7 +85,7 @@ env.Command(objects,
             r' -dSnmpSource=c:\snmp\bin'
             r' -dSslSource=c:\openssl\bin'
             ' -out ' + buildDir + r'\msi\\'
-            ' -arch x64'
+            ' -arch ' + arch
             ' -ext "$WIXUIEXT"'
             ' $SOURCES')
 
