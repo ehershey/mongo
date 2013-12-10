@@ -286,7 +286,7 @@ def setupdir(distro, arch, spec):
     # would be dst/x86_64/debian-sysvinit/mongodb-org-unstable/
     return "dst/%s/%s/%s%s-%s/" % (arch, distro.name(), distro.pkgbase(), spec.suffix(), spec.pversion(distro))
 
-def unpack_binaries_into(distro, arch, spec, where):
+def unpack_releasefiles_into(distro, arch, spec, where):
     """Unpack the tarfile for (distro, arch, spec) into directory where."""
     rootdir=os.getcwd()
     ensure_dir(where)
@@ -297,7 +297,8 @@ def unpack_binaries_into(distro, arch, spec, where):
     os.chdir(where)
     try:
         sysassert(["tar", "xvzf", rootdir+"/"+tarfile(distro, arch, spec), "mongodb-linux-%s-enterprise-%s-%s/bin" % (arch, distro.build_os(), spec.version())])
-        os.rename("mongodb-linux-%s-enterprise-%s-%s/bin" % (arch, distro.build_os(), spec.version()), "bin")
+        for releasefile in "bin", "LICENSE.txt", "MONGO-MIB.txt", "mongod.conf.master", "mongod.conf.subagent", "snmp.md", "README", "THIRD-PARTY-NOTICES":
+          os.rename("mongodb-linux-%s-enterprise-%s-%s/%s" % (arch, distro.build_os(), spec.version(), releasefile))
         os.rmdir("mongodb-linux-%s-enterprise-%s-%s" % (arch, distro.build_os(), spec.version()))
     except Exception:
         exc=sys.exc_value
@@ -319,10 +320,10 @@ def make_package(distro, arch, spec, srcdir):
         print "Copying packaging files from %s to %s" % ("%s/%s" % (srcdir, pkgdir), sdir)
         # FIXME: sh-dash-cee is bad. See if tarfile can do this.
         sysassert(["sh", "-c", "(cd \"%s\" && git archive r%s %s/ ) | (cd \"%s\" && tar xvf -)" % (srcdir, spec.version(), pkgdir, sdir)])
-    # Splat the binaries under sdir.  The "build" stages of the
-    # packaging infrastructure will move the binaries to wherever they
+    # Splat the binaries and snmp files under sdir.  The "build" stages of the
+    # packaging infrastructure will move the files to wherever they
     # need to go.  
-    unpack_binaries_into(distro, arch, spec, sdir+("%s/usr/"%BINARYDIR))
+    unpack_releasefiles_into(distro, arch, spec, sdir+("%s/usr/"%BINARYDIR))
     # Remove the mongosniff binary due to libpcap dynamic
     # linkage.  FIXME: this removal should go away
     # eventually.
