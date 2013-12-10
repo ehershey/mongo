@@ -92,23 +92,26 @@ install: build
 	mkdir -p $(CURDIR)/debian/mongodb-enterprise-unstable-server/usr/bin
 	mkdir -p $(CURDIR)/debian/mongodb-enterprise-unstable-mongos/usr/bin
 	mkdir -p $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongo $(CURDIR)/debian/mongodb-enterprise-unstable-shell/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongod $(CURDIR)/debian/mongodb-enterprise-unstable-server/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongos $(CURDIR)/debian/mongodb-enterprise-unstable-mongos/usr/bin
+	cp -v $(CURDIR)/bin/mongo $(CURDIR)/debian/mongodb-enterprise-unstable-shell/usr/bin
+	cp -v $(CURDIR)/bin/mongod $(CURDIR)/debian/mongodb-enterprise-unstable-server/usr/bin
+	cp -v $(CURDIR)/bin/mongos $(CURDIR)/debian/mongodb-enterprise-unstable-mongos/usr/bin
 
-	cp -v $(CURDIR)/BINARIES/usr/bin/bsondump $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongodump $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongoexport $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongofiles $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongoimport $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongooplog $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongoperf $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongorestore $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongostat $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongotop $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
+	cp -v $(CURDIR)/bin/bsondump $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
+	cp -v $(CURDIR)/bin/mongodump $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
+	cp -v $(CURDIR)/bin/mongoexport $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
+	cp -v $(CURDIR)/bin/mongofiles $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
+	cp -v $(CURDIR)/bin/mongoimport $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
+	cp -v $(CURDIR)/bin/mongooplog $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
+	cp -v $(CURDIR)/bin/mongoperf $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
+	cp -v $(CURDIR)/bin/mongorestore $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
+	cp -v $(CURDIR)/bin/mongostat $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
+	cp -v $(CURDIR)/bin/mongotop $(CURDIR)/debian/mongodb-enterprise-unstable-tools/usr/bin
 
 	mkdir -p $(CURDIR)/debian/mongodb-enterprise-unstable-server/etc
 	cp $(CURDIR)/debian/mongod.conf $(CURDIR)/debian/mongodb-enterprise-unstable-server/etc/mongod.conf 
+
+	mkdir -p $(CURDIR)/debian/mongodb-enterprise-unstable-server/usr/share/snmp/mibs/
+	cp -v $(CURDIR)/MONGO-MIB.txt $(CURDIR)/debian/mongodb-enterprise-unstable-server/usr/share/snmp/mibs/
 
 	mkdir -p $(CURDIR)/debian/mongodb-enterprise-unstable-shell/usr/share/lintian/overrides/
 	mkdir -p $(CURDIR)/debian/mongodb-enterprise-unstable-server/usr/share/lintian/overrides/
