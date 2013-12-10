@@ -296,9 +296,9 @@ def unpack_releasefiles_into(distro, arch, spec, where):
     # thing and chdir into where and run tar there.
     os.chdir(where)
     try:
-        sysassert(["tar", "xvzf", rootdir+"/"+tarfile(distro, arch, spec), "mongodb-linux-%s-enterprise-%s-%s/bin" % (arch, distro.build_os(), spec.version())])
+        sysassert(["tar", "xvzf", rootdir+"/"+tarfile(distro, arch, spec), "mongodb-linux-%s-enterprise-%s-%s/" % (arch, distro.build_os(), spec.version())])
         for releasefile in "bin", "LICENSE.txt", "MONGO-MIB.txt", "mongod.conf.master", "mongod.conf.subagent", "snmp.md", "README", "THIRD-PARTY-NOTICES":
-          os.rename("mongodb-linux-%s-enterprise-%s-%s/%s" % (arch, distro.build_os(), spec.version(), releasefile))
+          os.rename("mongodb-linux-%s-enterprise-%s-%s/%s" % (arch, distro.build_os(), spec.version(), releasefile), releasefile)
         os.rmdir("mongodb-linux-%s-enterprise-%s-%s" % (arch, distro.build_os(), spec.version()))
     except Exception:
         exc=sys.exc_value
@@ -323,12 +323,12 @@ def make_package(distro, arch, spec, srcdir):
     # Splat the binaries and snmp files under sdir.  The "build" stages of the
     # packaging infrastructure will move the files to wherever they
     # need to go.  
-    unpack_releasefiles_into(distro, arch, spec, sdir+("%s/usr/"%BINARYDIR))
+    unpack_releasefiles_into(distro, arch, spec, sdir)
     # Remove the mongosniff binary due to libpcap dynamic
     # linkage.  FIXME: this removal should go away
     # eventually.
-    if os.path.exists(sdir+("%s/usr/bin/mongosniff"%BINARYDIR)):
-      os.unlink(sdir+("%s/usr/bin/mongosniff"%BINARYDIR))
+    if os.path.exists(sdir + "bin/mongosniff"):
+      os.unlink(sdir + "bin/mongosniff")
     return distro.make_pkg(arch, spec, srcdir)
 
 def make_repo(repodir):
