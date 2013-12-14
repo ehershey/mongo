@@ -1,10 +1,5 @@
 #!/usr/bin/make -f
 # -*- makefile -*-
-# Sample debian/rules that uses debhelper.
-# This file was originally written by Joey Hess and Craig Small.
-# As a special exception, when this file is copied by dh-make into a
-# dh-make output file, you may use that output file without restriction.
-# This special exception was added by Craig Small in version 0.37 of dh-make.
 
 # Uncomment this to turn on verbose mode.
 export DH_VERBOSE=1
@@ -13,7 +8,6 @@ export DH_VERBOSE=1
 configure: configure-stamp
 configure-stamp:
 	dh_testdir
-        # Add here commands to configure the package.
 
 	touch configure-stamp
 
@@ -23,8 +17,7 @@ build: build-stamp
 build-stamp: configure-stamp  
 	dh_testdir
 
-        # Add here commands to compile the package.
-# THE FOLLOWING LINE IS INTENTIONALLY COMMENTED. 
+	# THE FOLLOWING LINE IS INTENTIONALLY COMMENTED. 
 	# scons 
         #docbook-to-man debian/mongodb.sgml > mongodb.1
 	echo debian/bsondump.1 > debian/mongodb-enterprise-tools.manpages
@@ -86,7 +79,7 @@ install: build
 	dh_prep
 	dh_installdirs
 
-# THE FOLLOWING LINE IS INTENTIONALLY COMMENTED.
+	# THE FOLLOWING LINE IS INTENTIONALLY COMMENTED.
 	# scons --prefix=$(CURDIR)/debian/mongodb/usr install
 	mkdir -p $(CURDIR)/debian/mongodb-enterprise-shell/usr/bin
 	mkdir -p $(CURDIR)/debian/mongodb-enterprise-server/usr/bin
@@ -96,16 +89,10 @@ install: build
 	cp -v $(CURDIR)/BINARIES/usr/bin/mongod $(CURDIR)/debian/mongodb-enterprise-server/usr/bin
 	cp -v $(CURDIR)/BINARIES/usr/bin/mongos $(CURDIR)/debian/mongodb-enterprise-mongos/usr/bin
 
-	cp -v $(CURDIR)/BINARIES/usr/bin/bsondump $(CURDIR)/debian/mongodb-enterprise-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongodump $(CURDIR)/debian/mongodb-enterprise-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongoexport $(CURDIR)/debian/mongodb-enterprise-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongofiles $(CURDIR)/debian/mongodb-enterprise-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongoimport $(CURDIR)/debian/mongodb-enterprise-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongooplog $(CURDIR)/debian/mongodb-enterprise-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongoperf $(CURDIR)/debian/mongodb-enterprise-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongorestore $(CURDIR)/debian/mongodb-enterprise-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongostat $(CURDIR)/debian/mongodb-enterprise-tools/usr/bin
-	cp -v $(CURDIR)/BINARIES/usr/bin/mongotop $(CURDIR)/debian/mongodb-enterprise-tools/usr/bin
+	for binary in bsondump mongodump mongoexport mongofiles mongoimport mongooplog mongoperf mongorestore mongostat mongotop ; \
+	do \
+	  cp -v $(CURDIR)/BINARIES/usr/bin/$$binary $(CURDIR)/debian/mongodb-enterprise-tools/usr/bin ; \
+	done
 
 	mkdir -p $(CURDIR)/debian/mongodb-enterprise-server/etc
 	cp $(CURDIR)/debian/mongod.conf $(CURDIR)/debian/mongodb-enterprise-server/etc/mongod.conf 
