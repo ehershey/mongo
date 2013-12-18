@@ -1,5 +1,6 @@
 #!/usr/bin/make -f
 # -*- makefile -*-
+TOOLS=bsondump mongodump mongoexport mongofiles mongoimport mongooplog mongoperf mongorestore mongostat mongotop
 
 # Uncomment this to turn on verbose mode.
 export DH_VERBOSE=1
@@ -19,18 +20,12 @@ build-stamp: configure-stamp
 
 	# THE FOLLOWING LINE IS INTENTIONALLY COMMENTED. 
 	# scons 
-        #docbook-to-man debian/mongodb.sgml > mongodb.1
-	echo debian/bsondump.1 > debian/mongodb-enterprise-tools.manpages
-	echo debian/mongodump.1 >> debian/mongodb-enterprise-tools.manpages
-	echo debian/mongoexport.1 >> debian/mongodb-enterprise-tools.manpages
-	echo debian/mongofiles.1 >> debian/mongodb-enterprise-tools.manpages
-	echo debian/mongoimport.1 >> debian/mongodb-enterprise-tools.manpages
-	echo debian/mongooplog.1 >> debian/mongodb-enterprise-tools.manpages
-	echo debian/mongoperf.1 >> debian/mongodb-enterprise-tools.manpages
-	echo debian/mongorestore.1 >> debian/mongodb-enterprise-tools.manpages
-	echo debian/mongosniff.1 >> debian/mongodb-enterprise-tools.manpages
-	echo debian/mongostat.1 >> debian/mongodb-enterprise-tools.manpages
-	echo debian/mongotop.1 >> debian/mongodb-enterprise-tools.manpages
+	#docbook-to-man debian/mongodb.sgml > mongodb.1
+	echo -n > debian/mongodb-enterprise-tools.manpages
+	for binary in ${TOOLS} ; \
+	do \
+	  echo debian/$$binary.1 >> debian/mongodb-enterprise-tools.manpages
+	done
 
 	echo debian/mongo.1 > debian/mongodb-enterprise-shell.manpages
 	echo debian/mongod.1 > debian/mongodb-enterprise-server.manpages
@@ -89,7 +84,7 @@ install: build
 	cp -v $(CURDIR)/BINARIES/usr/bin/mongod $(CURDIR)/debian/mongodb-enterprise-server/usr/bin
 	cp -v $(CURDIR)/BINARIES/usr/bin/mongos $(CURDIR)/debian/mongodb-enterprise-mongos/usr/bin
 
-	for binary in bsondump mongodump mongoexport mongofiles mongoimport mongooplog mongoperf mongorestore mongostat mongotop ; \
+	for binary in ${TOOLS} ; \
 	do \
 	  cp -v $(CURDIR)/BINARIES/usr/bin/$$binary $(CURDIR)/debian/mongodb-enterprise-tools/usr/bin ; \
 	done
