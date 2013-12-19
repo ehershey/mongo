@@ -25,7 +25,7 @@ build-stamp: configure-stamp
 	echo -n > debian/mongodb-org-tools.manpages
 	for binary in ${TOOLS} ; \
 	do \
-	  echo debian/$$binary.1 >> debian/mongodb-org-tools.manpages
+	  echo debian/$$binary.1 >> debian/mongodb-org-tools.manpages ; \
 	done
 
 	echo debian/mongo.1 > debian/mongodb-org-shell.manpages

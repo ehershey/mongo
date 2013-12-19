@@ -25,7 +25,7 @@ build-stamp: configure-stamp
 	echo -n > debian/mongodb-org-unstable-tools.manpages
 	for binary in ${TOOLS} ; \
 	do \
-	  echo debian/$$binary.1 >> debian/mongodb-org-unstable-tools.manpages
+	  echo debian/$$binary.1 >> debian/mongodb-org-unstable-tools.manpages ; \
 	done
 
 	echo debian/mongo.1 > debian/mongodb-org-unstable-shell.manpages
