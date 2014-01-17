@@ -93,9 +93,6 @@ install: build
 	mkdir -p $(CURDIR)/debian/mongodb-enterprise-unstable-server/etc
 	cp $(CURDIR)/debian/mongod.conf $(CURDIR)/debian/mongodb-enterprise-unstable-server/etc/mongod.conf 
 
-	mkdir -p $(CURDIR)/debian/mongodb-enterprise-unstable-server/usr/share/snmp/mibs/
-	cp -v $(CURDIR)/MONGO-MIB.txt $(CURDIR)/debian/mongodb-enterprise-unstable-server/usr/share/snmp/mibs/
-
 	mkdir -p $(CURDIR)/debian/mongodb-enterprise-unstable-shell/usr/share/lintian/overrides/
 	mkdir -p $(CURDIR)/debian/mongodb-enterprise-unstable-server/usr/share/lintian/overrides/
 	mkdir -p $(CURDIR)/debian/mongodb-enterprise-unstable-mongos/usr/share/lintian/overrides/
