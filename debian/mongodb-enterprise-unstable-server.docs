@@ -1,6 +1,7 @@
 LICENSE.txt
 mongod.conf.master
 mongod.conf.subagent
-snmp.md
+README-snmp.txt
+MONGO-MIB.txt
 README
 THIRD-PARTY-NOTICES

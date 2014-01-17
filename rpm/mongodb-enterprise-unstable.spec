@@ -95,8 +95,6 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/mongodb
 mkdir -p $RPM_BUILD_ROOT/var/log/mongodb
 mkdir -p $RPM_BUILD_ROOT/var/run/mongodb
 touch $RPM_BUILD_ROOT/var/log/mongodb/mongod.log
-mkdir -p $RPM_BUILD_ROOT/usr/share/snmp/mibs
-cp -v MONGO-MIB.txt $RPM_BUILD_ROOT/usr/share/snmp/mibs/MONGO-MIB.txt
 
 
 %clean
@@ -142,10 +140,10 @@ fi
 %attr(0755,mongodb,mongodb) %dir /var/run/mongodb
 %attr(0640,mongodb,mongodb) %config(noreplace) %verify(not md5 size mtime) /var/log/mongodb/mongod.log
 %doc LICENSE.txt
-/usr/share/snmp/mibs/MONGO-MIB.txt
+%doc MONGO-MIB.txt
 %doc mongod.conf.master
 %doc mongod.conf.subagent
-%doc snmp.md
+%doc README-snmp.txt
 %doc README
 %doc THIRD-PARTY-NOTICES
 
