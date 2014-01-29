@@ -19,13 +19,11 @@ env['MERGEMODULESBASEPATH'] = os.environ.get('MERGEMODULESBASEPATH')
 
 sources = [ "wxs/BinaryFragment.wxs",
             "wxs/FeatureFragment.wxs",
-            "wxs/LicensingFragment.wxs",
-            "wxs/Installer_64.wxs"
+            "wxs/LicensingFragment.wxs"
             ]
 objects = [ "$BUILD_DIR/msi/BinaryFragment.wixobj",
             "$BUILD_DIR/msi/FeatureFragment.wixobj",
             "$BUILD_DIR/msi/LicensingFragment.wixobj",
-            "$BUILD_DIR/msi/Installer_64.wixobj"
            ]
 
 # Need to do this in order to get scons to translate path separators into native format
@@ -33,17 +31,37 @@ buildDir = Dir(env["BUILD_DIR"]).path
 
 enterprisebase = 'src\mongo\db\modules\enterprise'
 
+# Enterprise
 if os.path.exists(enterprisebase):
   edition = 'Enterprise'
   flavor = '2008R2Plus'
   platform = 'x64'
   arch = 'x64'
+# Windows Legacy
+# else:
+  # edition = 'Standard'
+  # flavor = ''
+  # platform = 'x64'
+  # arch = 'x64'
+# Windows 64-bit
+# else:
+  # edition = 'Standard'
+  # flavor = '2008R2Plus'
+  # platform = 'x64'
+  # arch = 'x64'
+# Windows 32-bit
 else:
   edition = 'Standard'
-  flavor = '2008R2Plus'
-  platform = 'x64'
-  arch = 'x64'
+  flavor = ''
+  platform = 'x86'
+  arch = 'x86'
 
+if platform == 'x64':
+  sources.append("wxs/Installer_64.wxs")
+  objects.append("$BUILD_DIR/msi/Installer_64.wixobj")
+else:
+  sources.append("wxs/Installer.wxs")
+  objects.append("$BUILD_DIR/msi/Installer.wixobj")
 
 # candle: compile .wxs files into .wixobjs
 env.Command(objects, 
