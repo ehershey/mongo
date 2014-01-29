@@ -156,6 +156,12 @@ class Distro(object):
             return [ "rhel57", "rhel62" ]
         else:
             raise Exception("BUG: unsupported platform?")
+
+    def release_dist(self, build_os):
+        """Return the release distribution to use in the rpm - "el5" for rhel 5.x,
+        "el6" for rhel 6.x, return anything else unchanged"""
+
+        return re.sub(r'^rh(el\d)', '\1', build_os)
 def main(argv):
     (flags, specs) = parse_args(argv[1:])
     distros=[Distro(distro) for distro in DISTROS]
@@ -572,7 +578,8 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
     macrofiles=[l for l in backtick(["rpm", "--showrc"]).split("\n") if l.startswith("macrofiles")]
     flags=[]
     macropath=os.getcwd()+"/macros"
-    write_rpm_macros_file(macropath, topdir)
+
+    write_rpm_macros_file(macropath, topdir, distro.release_dist(build_os))
     if len(macrofiles)>0:
         macrofiles=macrofiles[0]+":"+macropath
         rcfile=os.getcwd()+"/rpmrc"
@@ -618,10 +625,11 @@ def write_rpmrc_file(path, string):
     finally:
         f.close()
 
-def write_rpm_macros_file(path, topdir):
+def write_rpm_macros_file(path, topdir, release_dist):
     f=open(path, 'w')
     try:
-        f.write("%%_topdir	%s" % topdir)
+        f.write("%%_topdir	%s\n" % topdir)
+        f.write("%%dist	.%s\n" % release_dist)
     finally:
         f.close()
 
