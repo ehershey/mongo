@@ -51,7 +51,7 @@ else:
     msi_flavor = ''
   else:
     msi_platform = 'x64'
-    if env['WIN_VERSION_MIN'] == 'ws08r2':
+    if env.get('WIN_VERSION_MIN') == 'ws08r2':
       msi_flavor = '2008R2Plus'
     else:
       msi_flavor = '2008R2Plus'
