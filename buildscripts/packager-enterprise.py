@@ -161,7 +161,7 @@ class Distro(object):
         """Return the release distribution to use in the rpm - "el5" for rhel 5.x,
         "el6" for rhel 6.x, return anything else unchanged"""
 
-        return re.sub(r'^rh(el\d)', '\1', build_os)
+        return re.sub(r'^rh(el\d).*$', r'\1', build_os)
 def main(argv):
     (flags, specs) = parse_args(argv[1:])
     distros=[Distro(distro) for distro in DISTROS]
@@ -284,7 +284,7 @@ def ensure_dir(filename):
 def tarfile(build_os, arch, spec):
     """Return the location where we store the downloaded tarball for
     this package"""
-    return "dl/mongodb-linux-%s-subscription-%s-%s.tar.gz" % (spec.version(), build_os, arch)
+    return "dl/mongodb-linux-%s-enterprise-%s-%s.tar.gz" % (spec.version(), build_os, arch)
 
 def setupdir(distro, build_os, arch, spec):
     # The setupdir will be a directory containing all inputs to the
@@ -305,9 +305,9 @@ def unpack_binaries_into(build_os, arch, spec, where):
     # thing and chdir into where and run tar there.
     os.chdir(where)
     try:
-        sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec), "mongodb-linux-%s-subscription-%s-%s/bin" % (arch, build_os, spec.version())])
-        os.rename("mongodb-linux-%s-subscription-%s-%s/bin" % (arch, build_os, spec.version()), "bin")
-        os.rmdir("mongodb-linux-%s-subscription-%s-%s" % (arch, build_os, spec.version()))
+        sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec), "mongodb-linux-%s-enterprise-%s-%s/bin" % (arch, build_os, spec.version())])
+        os.rename("mongodb-linux-%s-enterprise-%s-%s/bin" % (arch, build_os, spec.version()), "bin")
+        os.rmdir("mongodb-linux-%s-enterprise-%s-%s" % (arch, build_os, spec.version()))
     except Exception:
         exc=sys.exc_value
         os.chdir(rootdir)
