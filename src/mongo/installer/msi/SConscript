@@ -54,7 +54,7 @@ else:
     if env.get('WIN_VERSION_MIN') == 'ws08r2':
       msi_flavor = '2008R2Plus'
     else:
-      msi_flavor = '2008R2Plus'
+      msi_flavor = ''
 
 if msi_platform == 'x64':
   sources.append("wxs/Installer_64.wxs")
