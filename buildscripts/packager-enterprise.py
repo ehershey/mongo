@@ -330,6 +330,8 @@ def make_package(distro, build_os, arch, spec, srcdir):
     # Remove the mongosniff binary due to libpcap dynamic
     # linkage.  FIXME: this removal should go away
     # eventually.
+    if os.path.exists(sdir + "bin/mongoadmin"):
+      os.unlink(sdir + "bin/mongoadmin")
     if os.path.exists(sdir + "bin/mongosniff"):
       os.unlink(sdir + "bin/mongosniff")
     return distro.make_pkg(build_os, arch, spec, srcdir)
