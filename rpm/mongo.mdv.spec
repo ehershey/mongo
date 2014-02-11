@@ -3,7 +3,7 @@
 %define release %mkrel 1
 
 Name:    %{name}
-Version: %{version}
+Version: 2.5.5
 Release: %{release}
 Summary: MongoDB client shell and tools
 License: AGPL 3.0
