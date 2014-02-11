@@ -139,12 +139,12 @@ fi
 %attr(0755,mongodb,mongodb) %dir /var/log/mongodb
 %attr(0755,mongodb,mongodb) %dir /var/run/mongodb
 %attr(0640,mongodb,mongodb) %config(noreplace) %verify(not md5 size mtime) /var/log/mongodb/mongod.log
+%doc snmp/MONGOD-MIB.txt
+%doc snmp/MONGODBINC-MIB.txt
+%doc snmp/mongod.conf.master
+%doc snmp/mongod.conf.subagent
+%doc snmp/README-snmp.txt
 %doc LICENSE.txt
-%doc MONGOD-MIB.txt
-%doc MONGODBINC-MIB.txt
-%doc mongod.conf.master
-%doc mongod.conf.subagent
-%doc README-snmp.txt
 %doc README
 %doc THIRD-PARTY-NOTICES
 
