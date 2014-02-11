@@ -300,7 +300,7 @@ def unpack_binaries_into(build_os, arch, spec, where):
     os.chdir(where)
     try:
         sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec), "mongodb-linux-%s-enterprise-%s-%s/" % (arch, build_os, spec.version())])
-        for releasefile in "bin", "LICENSE.txt", "MONGO-MIB.txt", "mongod.conf.master", "mongod.conf.subagent", "snmp.md", "README", "THIRD-PARTY-NOTICES":
+        for releasefile in "bin", "LICENSE.txt", "MONGOD-MIB.txt", "MONGODBINC-MIB.txt", "mongod.conf.master", "mongod.conf.subagent", "README-snmp.txt", "README", "THIRD-PARTY-NOTICES":
           os.rename("mongodb-linux-%s-enterprise-%s-%s/%s" % (arch, build_os, spec.version(), releasefile), releasefile)
         os.rmdir("mongodb-linux-%s-enterprise-%s-%s" % (arch, build_os, spec.version()))
     except Exception:

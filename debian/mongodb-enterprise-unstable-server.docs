@@ -2,6 +2,7 @@ LICENSE.txt
 mongod.conf.master
 mongod.conf.subagent
 README-snmp.txt
-MONGO-MIB.txt
+MONGOD-MIB.txt
+MONGODBINC-MIB.txt
 README
 THIRD-PARTY-NOTICES

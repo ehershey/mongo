@@ -140,7 +140,8 @@ fi
 %attr(0755,mongodb,mongodb) %dir /var/run/mongodb
 %attr(0640,mongodb,mongodb) %config(noreplace) %verify(not md5 size mtime) /var/log/mongodb/mongod.log
 %doc LICENSE.txt
-%doc MONGO-MIB.txt
+%doc MONGOD-MIB.txt
+%doc MONGODBINC-MIB.txt
 %doc mongod.conf.master
 %doc mongod.conf.subagent
 %doc README-snmp.txt
