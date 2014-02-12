@@ -38,8 +38,10 @@ enterprisebase = 'src\mongo\db\modules\enterprise'
 # msi_flavor - "2008R2Plus" or "" 
 #
 
+
+
 # Enterprise
-if os.path.exists(enterprisebase):
+if 'enterprise' in env['MONGO_MODULES']:
   msi_edition = 'Enterprise'
   msi_flavor = '2008R2Plus'
   msi_platform = 'x64'
