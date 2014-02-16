@@ -218,7 +218,7 @@ def main(argv):
             httpget(urlfmt % (arch, build_os, spec.version()), ensure_dir(tarfile(build_os, arch, spec)))
 
             repo = make_package(distro, build_os, arch, spec, srcdir)
-            make_repo(repo, distro, build_os)
+            make_repo(repo, distro, build_os, spec)
     
     finally:
         os.chdir(oldcwd)
@@ -365,9 +365,9 @@ def make_package(distro, build_os, arch, spec, srcdir):
       os.unlink(sdir + "bin/mongosniff")
     return distro.make_pkg(build_os, arch, spec, srcdir)
 
-def make_repo(repodir, distro, build_os):
+def make_repo(repodir, distro, build_os, spec):
     if re.search("(debian|ubuntu)", repodir):
-        make_deb_repo(repodir, distro, build_os)
+        make_deb_repo(repodir, distro, build_os, spec)
     elif re.search("(centos|redhat|fedora)", repodir):
         make_rpm_repo(repodir)
     else:
@@ -419,7 +419,7 @@ def make_deb(distro, build_os, arch, spec, srcdir):
     sysassert(["sh", "-c", "cp -v \"%s/../\"*.deb \"%s\""%(sdir, r)])
     return r
 
-def make_deb_repo(repo, distro, build_os):
+def make_deb_repo(repo, distro, build_os, spec):
     # Note: the Debian repository Packages files must be generated
     # very carefully in order to be usable.
     oldpwd=os.getcwd()
@@ -444,21 +444,21 @@ def make_deb_repo(repo, distro, build_os):
     # Notes: the Release{,.gpg} files must live in a special place,
     # and must be created after all the Packages.gz files have been
     # done.
-    s="""
-Origin: mongodb
+    s="""Origin: mongodb
 Label: mongodb
 Suite: mongodb
 Codename: %s
+Version: %s
 Architectures: amd64
 Components: non-free
 Description: MongoDB packages
-""" % (distro.repo_os_version(build_os))
-    if os.path.exists(repo+"../../../../Release"):
-        os.unlink(repo+"../../../../Release")
-    if os.path.exists(repo+"../../../../Release.gpg"):
-        os.unlink(repo+"../../../../Release.gpg")
+""" % (distro.repo_os_version(build_os), spec.version())
+    if os.path.exists(repo+"../../Release"):
+        os.unlink(repo+"../../Release")
+    if os.path.exists(repo+"../../Release.gpg"):
+        os.unlink(repo+"../../Release.gpg")
     oldpwd=os.getcwd()
-    os.chdir(repo+"../../../../")
+    os.chdir(repo+"../../")
     s2=backtick(["apt-ftparchive", "release", "."])
     try:
         f=open("Release", 'w')
@@ -580,7 +580,7 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
     suffix=spec.suffix()
     sdir=setupdir(distro, build_os, arch, spec)
     specfile=srcdir+"rpm/mongodb%s.spec" % suffix
-    topdir=ensure_dir(os.getcwd()+'/rpmbuild/')
+    topdir=ensure_dir('%s/rpmbuild/%s/' % (os.getcwd(), build_os))
     for subdir in ["BUILD", "RPMS", "SOURCES", "SPECS", "SRPMS"]:
         ensure_dir("%s/%s/" % (topdir, subdir))
     distro_arch=distro.archname(arch)
