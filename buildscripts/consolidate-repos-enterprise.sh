@@ -57,7 +57,7 @@ echo
 for debian_dir in "$repodir"/apt/ubuntu "$repodir"/apt/debian 
 do
   cd "$debian_dir"
-  for section_dir in $(find . -type d -name non-free)
+  for section_dir in $(find dists -type d -name non-free)
   do
     for arch_dir in "$section_dir"/{binary-i386,binary-amd64}
     do
@@ -71,12 +71,9 @@ do
     done
   done
 
-  for release_dir in "$debian_dir"/dists/* 
+  for release_file in $(find "$debian_dir" -name Release)
   do
-    if [ ! -d "$release_dir" ] 
-    then
-       continue
-    fi
+    release_dir=$(dirname "$release_file")
     echo "Generating Release file under $release_dir"
     cd $release_dir
     tempfile=$(mktemp /tmp/ReleaseXXXXXX)
