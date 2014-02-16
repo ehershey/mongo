@@ -48,7 +48,7 @@ REPOPATH="/var/www/repo"
 ARCHES=["x86_64"]
 
 # Made up names for the flavors of distribution we package for.
-DISTROS=["redhat"]
+DISTROS=["ubuntu-upstart"]
 
 
 class Spec(object):
@@ -304,9 +304,14 @@ def unpack_binaries_into(build_os, arch, spec, where):
         	#os.rename("mongodb-linux-x86_64-enterprise-ubuntu1204-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-11", "mongodb-linux-%s-enterprise-%s-%s/" % (arch, build_os, spec.version()))
 		sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec), "mongodb-linux-x86_64-enterprise-rhel57-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-10/"])
         	os.rename("mongodb-linux-x86_64-enterprise-rhel57-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-10", "mongodb-linux-%s-enterprise-%s-%s/" % (arch, build_os, spec.version()))
-	else:
+	elif build_os == 'rhel62':
 		sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec), "mongodb-linux-x86_64-enterprise-rhel62-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-10/"])
         	os.rename("mongodb-linux-x86_64-enterprise-rhel62-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-10", "mongodb-linux-%s-enterprise-%s-%s/" % (arch, build_os, spec.version()))
+	elif build_os == 'ubuntu1204':
+		sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec), "mongodb-linux-x86_64-enterprise-ubuntu1204-d18bbbd685aa80cce67a4642082f97a1cba9081f-2014-02-15/"])
+        	os.rename("mongodb-linux-x86_64-enterprise-ubuntu1204-d18bbbd685aa80cce67a4642082f97a1cba9081f-2014-02-15", "mongodb-linux-%s-enterprise-%s-%s/" % (arch, build_os, spec.version()))
+	else:
+		raise Exception("Unknown build_os: %s" % build_os)
         for releasefile in "bin", "snmp", "LICENSE.txt", "README", "THIRD-PARTY-NOTICES":
           os.rename("mongodb-linux-%s-enterprise-%s-%s/%s" % (arch, build_os, spec.version(), releasefile), releasefile)
         os.rmdir("mongodb-linux-%s-enterprise-%s-%s" % (arch, build_os, spec.version()))
