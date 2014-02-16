@@ -48,7 +48,7 @@ REPOPATH="/var/www/repo"
 ARCHES=["x86_64"]
 
 # Made up names for the flavors of distribution we package for.
-DISTROS=["ubuntu-upstart"]
+DISTROS=["ubuntu"]
 
 
 class Spec(object):
@@ -101,6 +101,12 @@ class Spec(object):
         if param in self.params:
             return self.params[param]
         return None
+    
+    def branch(self):
+        """Return the major and minor portions of the specificed version.
+        For example, if the version is "2.5.5" the branch would be "2.5"
+        """
+        return ".".join(self.ver.split(".")[0:2])
 
 class Distro(object):
     def __init__(self, string):
@@ -120,18 +126,43 @@ class Distro(object):
         else:
             raise Exception("BUG: unsupported platform?")
 
-    def repodir(self, arch, build_os):
+    def repodir(self, arch, build_os, spec):
         """Return the directory where we'll place the package files for
         (distro, distro_version) in that distro's preferred repository
         layout (as distinct from where that distro's packaging building
-        tools place the package files)."""
+        tools place the package files).
+
+        Examples:
+
+        repo/apt/ubuntu/dists/precise/mongodb-enterprise/2.5/non-free/binary-amd64
+        repo/apt/ubuntu/dists/precise/mongodb-enterprise/2.5/non-free/binary-i386
+
+        repo/yum/redhat/6/mongodb-enterprise/2.5/x86_64
+        yum/redhat/6/mongodb-enterprise/2.5/i386
+
+        """
+
         if re.search("^(debian|ubuntu)", self.n):
-            return "repo/%s/dists/dist/10gen/binary-%s/" % (self.n, self.archname(arch))
+            return "repo/apt/%s/dists/%s/mongodb-enterprise/%s/binary-%s/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
         elif re.search("(redhat|fedora|centos)", self.n):
-            return "repo/%s/os/%s/%s/RPMS/" % (self.n, build_os, self.archname(arch))
+            return "repo/yum/%s/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
         else:
             raise Exception("BUG: unsupported platform?")
-    
+
+    def repo_os_version(self, build_os):
+        """Return an OS version suitable for package repo directory 
+        naming - e.g. 5, 6 or 7 for redhat/centos, "precise," "wheezy," etc. 
+        for Ubuntu/Debian"""
+        if self.n == 'redhat':
+            return re.sub(r'^rhel(\d).*$', r'\1', build_os)
+        elif self.n == 'ubuntu':
+            if build_os == 'ubuntu1204':
+                return "precise"
+            else:
+                raise Exception("unsupported build_os: %s" % build_os)
+        else:
+            raise Exception("unsupported distro: %s" % self.n)
+
     def make_pkg(self, build_os, arch, spec, srcdir):
         if re.search("^(debian|ubuntu)", self.n):
             return make_deb(self, build_os, arch, spec, srcdir)
@@ -141,7 +172,7 @@ class Distro(object):
             raise Exception("BUG: unsupported platform?")
 
     def build_os(self):
-        """Return the build os label in the binary package to download ("rhel62" 
+        """Return the build os label in the binary package to download ("rhel57" and "rhel62" 
         for redhat, "ubuntu1204" for Ubuntu and Debian)"""
 
         if re.search("^(debian|ubuntu)", self.n):
@@ -363,14 +394,14 @@ def make_deb(distro, build_os, arch, spec, srcdir):
     # debian/rules file.
     suffix=spec.suffix()
     sdir=setupdir(distro, build_os, arch, spec)
-    if re.search("sysvinit", distro.name()):
+    if re.search("debian", distro.name()):
         os.link(sdir+"debian/init.d", sdir+"debian/%s%s-server.mongod.init" % (distro.pkgbase(), suffix))
         os.unlink(sdir+"debian/mongod.upstart")
-    elif re.search("upstart", distro.name()):
+    elif re.search("ubuntu", distro.name()):
         os.link(sdir+"debian/mongod.upstart", sdir+"debian/%s%s-server.mongod.upstart" % (distro.pkgbase(), suffix))
         os.unlink(sdir+"debian/init.d")
     else:
-        raise Exception("unknown debianoid flavor: not sysvinit or upstart?")
+        raise Exception("unknown debianoid flavor: not debian or ubuntu?")
     # Rewrite the control and rules files
     write_debian_changelog(sdir+"debian/changelog", spec, srcdir)
     distro_arch=distro.archname(arch)
@@ -394,7 +425,7 @@ def make_deb(distro, build_os, arch, spec, srcdir):
         sysassert(["dpkg-buildpackage", "-a"+distro_arch, "-k Richard Kreuter <richard@10gen.com>"])
     finally:
         os.chdir(oldcwd)
-    r=distro.repodir(arch, build_os)
+    r=distro.repodir(arch, build_os, spec)
     ensure_dir(r)
     # FIXME: see if shutil.copyfile or something can do this without
     # much pain.
@@ -611,7 +642,7 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
         os.chdir(oldcwd)
     # Do the build.
     sysassert(["rpmbuild", "-ba", "--target", distro_arch] + flags + ["%s/SPECS/mongodb%s.spec" % (topdir, suffix)])
-    r=distro.repodir(arch, build_os)
+    r=distro.repodir(arch, build_os, spec)
     ensure_dir(r)
     # FIXME: see if some combination of shutil.copy<hoohah> and glob
     # can do this without shelling out.
