@@ -217,12 +217,8 @@ def main(argv):
 
             httpget(urlfmt % (arch, build_os, spec.version()), ensure_dir(tarfile(build_os, arch, spec)))
 
-            repos.append(make_package(distro, build_os, arch, spec, srcdir))
-    
-        # Build the repos' metadatas.
-        for repo in set(repos):
-            print repo
-            make_repo(repo)
+            repo = make_package(distro, build_os, arch, spec, srcdir)
+            make_repo(repo, distro, build_os)
     
     finally:
         os.chdir(oldcwd)
@@ -369,9 +365,9 @@ def make_package(distro, build_os, arch, spec, srcdir):
       os.unlink(sdir + "bin/mongosniff")
     return distro.make_pkg(build_os, arch, spec, srcdir)
 
-def make_repo(repodir):
+def make_repo(repodir, distro, build_os):
     if re.search("(debian|ubuntu)", repodir):
-        make_deb_repo(repodir)
+        make_deb_repo(repodir, distro, build_os)
     elif re.search("(centos|redhat|fedora)", repodir):
         make_rpm_repo(repodir)
     else:
@@ -423,7 +419,7 @@ def make_deb(distro, build_os, arch, spec, srcdir):
     sysassert(["sh", "-c", "cp -v \"%s/../\"*.deb \"%s\""%(sdir, r)])
     return r
 
-def make_deb_repo(repo):
+def make_deb_repo(repo, distro, build_os):
     # Note: the Debian repository Packages files must be generated
     # very carefully in order to be usable.
     oldpwd=os.getcwd()
@@ -453,17 +449,16 @@ Origin: mongodb
 Label: mongodb
 Suite: mongodb
 Codename: %s
-Version: %s
 Architectures: amd64
-Components: mongodb
-Description: mongodb packages
-""" % ("dist", "dist")
-    if os.path.exists(repo+"../../Release"):
-        os.unlink(repo+"../../Release")
-    if os.path.exists(repo+"../../Release.gpg"):
-        os.unlink(repo+"../../Release.gpg")
+Components: non-free
+Description: MongoDB packages
+""" % (distro.repo_os_version(build_os))
+    if os.path.exists(repo+"../../../../Release"):
+        os.unlink(repo+"../../../../Release")
+    if os.path.exists(repo+"../../../../Release.gpg"):
+        os.unlink(repo+"../../../../Release.gpg")
     oldpwd=os.getcwd()
-    os.chdir(repo+"../../")
+    os.chdir(repo+"../../../../")
     s2=backtick(["apt-ftparchive", "release", "."])
     try:
         f=open("Release", 'w')

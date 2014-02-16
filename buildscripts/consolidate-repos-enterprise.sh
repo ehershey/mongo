@@ -17,12 +17,9 @@ echo "Using directory: $repodir"
 
 # set up repo dirs if they don't exist
 #
-for distro in debian-sysvinit redhat ubuntu-upstart
-do
-  mkdir -p "$repodir/$distro"
-done
-
-mkdir -p "$repodir"
+mkdir -p $repodir/apt/ubuntu
+mkdir -p $repodir/apt/debian
+mkdir -p $repodir/yum/redhat
 
 echo "Scanning and copying package files from $source_dir"
 echo ". = skipping existing file, @ = copying file"
@@ -57,36 +54,45 @@ echo
 
 # packages are in place, now create metadata
 #
-for debian_dir in "$repodir"/ubuntu-* "$repodir"/debian-* 
+for debian_dir in "$repodir"/apt/ubuntu "$repodir"/apt/debian 
 do
-  cd "$debian_dir" 
-  for arch_dir in dists/dist/10gen/{binary-i386,binary-amd64}
+  cd "$debian_dir"
+  for section_dir in $(find . -type d -name non-free)
   do
-    echo "Generating Packages file under $debian_dir/$arch_dir"
-    if [ ! -d $arch_dir ]
-    then
-      mkdir $arch_dir
-    fi
-    dpkg-scanpackages --multiversion "$arch_dir"   > "$arch_dir"/Packages
-    gzip -9c  "$arch_dir"/Packages >  "$arch_dir"/Packages.gz
+    for arch_dir in "$section_dir"/{binary-i386,binary-amd64}
+    do
+      echo "Generating Packages file under $debian_dir/$arch_dir"
+      if [ ! -d $arch_dir ]
+      then
+        mkdir $arch_dir
+      fi
+      dpkg-scanpackages --multiversion "$arch_dir"   > "$arch_dir"/Packages
+      gzip -9c  "$arch_dir"/Packages >  "$arch_dir"/Packages.gz
+    done
   done
 
-  release_dir="$debian_dir"/dists/dist
-  echo "Generating Release file under $release_dir"
-  cd $release_dir
-  tempfile=$(mktemp /tmp/ReleaseXXXXXX)
-  tempfile2=$(mktemp /tmp/ReleaseXXXXXX)
-  mv Release $tempfile
-  head -9 $tempfile > $tempfile2
-  apt-ftparchive release . >> $tempfile2
-  cp $tempfile2 Release
-  chmod 644 Release
-  rm Release.gpg
-  echo "Signing Release file"
-  gpg -r "$gpg_recip" --no-secmem-warning -abs --output Release.gpg  Release
+  for release_dir in "$debian_dir"/dists/* 
+  do
+    if [ ! -d "$release_dir" ] 
+    then
+       continue
+    fi
+    echo "Generating Release file under $release_dir"
+    cd $release_dir
+    tempfile=$(mktemp /tmp/ReleaseXXXXXX)
+    tempfile2=$(mktemp /tmp/ReleaseXXXXXX)
+    mv Release $tempfile
+    head -8 $tempfile > $tempfile2
+    apt-ftparchive release . >> $tempfile2
+    cp $tempfile2 Release
+    chmod 644 Release
+    rm Release.gpg
+    echo "Signing Release file"
+    gpg -r "$gpg_recip" --no-secmem-warning -abs --output Release.gpg  Release
+  done
 done
 
-for redhat_dir in $(find "$repodir"/redhat -type d -name x86_64 -o -name i386)
+for redhat_dir in $(find "$repodir"/yum/redhat -type d -name x86_64 -o -name i386)
 do
   echo "Generating redhat repo metadata under $redhat_dir"
   cd "$redhat_dir"
