@@ -48,7 +48,7 @@ REPOPATH="/var/www/repo"
 ARCHES=["x86_64"]
 
 # Made up names for the flavors of distribution we package for.
-DISTROS=["ubuntu-upstart", "redhat"]
+DISTROS=["redhat"]
 
 
 class Spec(object):
@@ -175,7 +175,7 @@ def main(argv):
     os.chdir(prefix)
     try:
         # Download the binaries.
-        urlfmt="http://downloads.mongodb.com/linux/mongodb-linux-%s-enterprise-%s-%s.tgz"
+        urlfmt="http://downloads.mongodb.com/linux/mongodb-linux-%s-enterprise-%s-latest.tgz?%s"
     
         # Build a pacakge for each distro/spec/arch tuple, and
         # accumulate the repository-layout directories.
@@ -299,7 +299,14 @@ def unpack_binaries_into(build_os, arch, spec, where):
     # thing and chdir into where and run tar there.
     os.chdir(where)
     try:
-        sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec), "mongodb-linux-%s-enterprise-%s-%s/" % (arch, build_os, spec.version())])
+        if build_os == 'rhel57': 
+		#sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec), "mongodb-linux-x86_64-enterprise-ubuntu1204-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-11/"])
+        	#os.rename("mongodb-linux-x86_64-enterprise-ubuntu1204-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-11", "mongodb-linux-%s-enterprise-%s-%s/" % (arch, build_os, spec.version()))
+		sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec), "mongodb-linux-x86_64-enterprise-rhel57-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-10/"])
+        	os.rename("mongodb-linux-x86_64-enterprise-rhel57-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-10", "mongodb-linux-%s-enterprise-%s-%s/" % (arch, build_os, spec.version()))
+	else:
+		sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec), "mongodb-linux-x86_64-enterprise-rhel62-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-10/"])
+        	os.rename("mongodb-linux-x86_64-enterprise-rhel62-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-10", "mongodb-linux-%s-enterprise-%s-%s/" % (arch, build_os, spec.version()))
         for releasefile in "bin", "snmp", "LICENSE.txt", "README", "THIRD-PARTY-NOTICES":
           os.rename("mongodb-linux-%s-enterprise-%s-%s/%s" % (arch, build_os, spec.version(), releasefile), releasefile)
         os.rmdir("mongodb-linux-%s-enterprise-%s-%s" % (arch, build_os, spec.version()))
