@@ -28,6 +28,7 @@
 
 import errno
 import getopt
+from glob import glob
 from packager import httpget
 import os
 import re
@@ -48,7 +49,7 @@ REPOPATH="/var/www/repo"
 ARCHES=["x86_64"]
 
 # Made up names for the flavors of distribution we package for.
-DISTROS=["ubuntu"]
+DISTROS=["redhat","ubuntu"]
 
 
 class Spec(object):
@@ -143,7 +144,7 @@ class Distro(object):
         """
 
         if re.search("^(debian|ubuntu)", self.n):
-            return "repo/apt/%s/dists/%s/mongodb-enterprise/%s/binary-%s/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
+            return "repo/apt/%s/dists/%s/mongodb-enterprise/%s/non-free/binary-%s/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
         elif re.search("(redhat|fedora|centos)", self.n):
             return "repo/yum/%s/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
         else:
@@ -178,7 +179,7 @@ class Distro(object):
         if re.search("^(debian|ubuntu)", self.n):
             return [ "ubuntu1204" ]
         elif re.search("(redhat|fedora|centos)", self.n):
-            return [ "rhel57", "rhel62" ]
+            return [ "rhel62", "rhel57" ]
         else:
             raise Exception("BUG: unsupported platform?")
 
@@ -330,22 +331,11 @@ def unpack_binaries_into(build_os, arch, spec, where):
     # thing and chdir into where and run tar there.
     os.chdir(where)
     try:
-        if build_os == 'rhel57': 
-		#sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec), "mongodb-linux-x86_64-enterprise-ubuntu1204-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-11/"])
-        	#os.rename("mongodb-linux-x86_64-enterprise-ubuntu1204-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-11", "mongodb-linux-%s-enterprise-%s-%s/" % (arch, build_os, spec.version()))
-		sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec), "mongodb-linux-x86_64-enterprise-rhel57-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-10/"])
-        	os.rename("mongodb-linux-x86_64-enterprise-rhel57-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-10", "mongodb-linux-%s-enterprise-%s-%s/" % (arch, build_os, spec.version()))
-	elif build_os == 'rhel62':
-		sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec), "mongodb-linux-x86_64-enterprise-rhel62-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-10/"])
-        	os.rename("mongodb-linux-x86_64-enterprise-rhel62-b5f67b6a6aec989aec7c01fd445b25c5804f9016-2014-02-10", "mongodb-linux-%s-enterprise-%s-%s/" % (arch, build_os, spec.version()))
-	elif build_os == 'ubuntu1204':
-		sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec), "mongodb-linux-x86_64-enterprise-ubuntu1204-d18bbbd685aa80cce67a4642082f97a1cba9081f-2014-02-15/"])
-        	os.rename("mongodb-linux-x86_64-enterprise-ubuntu1204-d18bbbd685aa80cce67a4642082f97a1cba9081f-2014-02-15", "mongodb-linux-%s-enterprise-%s-%s/" % (arch, build_os, spec.version()))
-	else:
-		raise Exception("Unknown build_os: %s" % build_os)
+	sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec)])
+    	release_dir = glob('mongodb-linux-*')[0]
         for releasefile in "bin", "snmp", "LICENSE.txt", "README", "THIRD-PARTY-NOTICES":
-          os.rename("mongodb-linux-%s-enterprise-%s-%s/%s" % (arch, build_os, spec.version(), releasefile), releasefile)
-        os.rmdir("mongodb-linux-%s-enterprise-%s-%s" % (arch, build_os, spec.version()))
+            os.rename("%s/%s" % (release_dir, releasefile), releasefile)
+        os.rmdir(release_dir)
     except Exception:
         exc=sys.exc_value
         os.chdir(rootdir)
