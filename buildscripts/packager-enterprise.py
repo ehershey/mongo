@@ -146,7 +146,7 @@ class Distro(object):
         if re.search("^(debian|ubuntu)", self.n):
             return "repo/apt/%s/dists/%s/mongodb-enterprise/%s/non-free/binary-%s/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
         elif re.search("(redhat|fedora|centos)", self.n):
-            return "repo/yum/%s/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
+            return "repo/yum/%s/%s/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
         else:
             raise Exception("BUG: unsupported platform?")
 
