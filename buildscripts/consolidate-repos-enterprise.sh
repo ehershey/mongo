@@ -13,13 +13,28 @@ repodir=/var/www-enterprise/repo.consolidated
 
 gpg_recip='<richard@10gen.com>' 
 
+stable_branch="2.4"
+unstable_branch="2.5"
+
 echo "Using directory: $repodir"
 
 # set up repo dirs if they don't exist
 #
-mkdir -p $repodir/apt/ubuntu
-mkdir -p $repodir/apt/debian
-mkdir -p $repodir/yum/redhat
+mkdir -p "$repodir/apt/ubuntu"
+mkdir -p "$repodir/apt/debian"
+mkdir -p "$repodir/yum/redhat"
+
+# to support different $releasever values in yum repo configurations
+#
+if [ ! -e "$repodir/yum/redhat/6Server" ]
+then
+  ln -s 6 "$repodir/yum/redhat/6Server" 
+fi
+
+if [ ! -e "$repodir/yum/redhat/5Server" ]
+then
+  ln -s 5 "$repodir/yum/redhat/5Server" 
+fi
 
 echo "Scanning and copying package files from $source_dir"
 echo ". = skipping existing file, @ = copying file"
@@ -87,6 +102,34 @@ do
     echo "Signing Release file"
     gpg -r "$gpg_recip" --no-secmem-warning -abs --output Release.gpg  Release
   done
+done
+
+# Create symlinks for stable and unstable branches
+#
+# Examples:
+# 
+# /var/www-enterprise/repo.consolidated/yum/redhat/5/mongodb-enterprise/unstable -> 2.5
+# /var/www-enterprise/repo.consolidated/yum/redhat/6/mongodb-enterprise/unstable -> 2.5
+# /var/www-enterprise/repo.consolidated/apt/ubuntu/dists/precise/mongodb-enterprise/unstable -> 2.5
+#
+for unstable_branch_dir in "$repodir"/yum/redhat/*/*/$unstable_branch "$repodir"/apt/debian/dists/*/*/$unstable_branch "$repodir"/apt/ubuntu/dists/*/*/$unstable_branch
+do
+  full_unstable_path=$(dirname "$unstable_branch_dir")/unstable
+  if [ -e "$unstable_branch_dir" -a ! -e "$full_unstable_path" ]
+  then
+    echo "Linking unstable branch directory $unstable_branch_dir to $full_unstable_path"
+    ln -s $unstable_branch $full_unstable_path
+  fi
+done
+
+for stable_branch_dir in "$repodir"/yum/redhat/*/*/$stable_branch "$repodir"/apt/debian/dists/*/*/$stable_branch "$repodir"/apt/ubuntu/dists/*/*/$stable_branch
+do
+  full_stable_path=$(dirname "$stable_branch_dir")/stable
+  if [ -e "$stable_branch_dir" -a ! -e "$full_stable_path" ]
+  then
+    echo "Linking stable branch directory $stable_branch_dir to $full_stable_path"
+    ln -s $stable_branch $full_stable_path
+  fi
 done
 
 for redhat_dir in $(find "$repodir"/yum/redhat -type d -name x86_64 -o -name i386)
