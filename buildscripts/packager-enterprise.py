@@ -92,7 +92,7 @@ class Spec(object):
         # will be the package's version number (but we need to know
         # our upstream version too).
         if re.search("^(debian|ubuntu)", distro.name()):
-            return re.sub("-", "~", self.ver)                
+            return re.sub("-", "~", self.ver)
         elif re.search("(redhat|fedora|centos)", distro.name()):
             return re.sub("\\d+-", "", self.ver)
         else:
@@ -102,7 +102,7 @@ class Spec(object):
         if param in self.params:
             return self.params[param]
         return None
-    
+
     def branch(self):
         """Return the major and minor portions of the specificed version.
         For example, if the version is "2.5.5" the branch would be "2.5"
@@ -151,8 +151,8 @@ class Distro(object):
             raise Exception("BUG: unsupported platform?")
 
     def repo_os_version(self, build_os):
-        """Return an OS version suitable for package repo directory 
-        naming - e.g. 5, 6 or 7 for redhat/centos, "precise," "wheezy," etc. 
+        """Return an OS version suitable for package repo directory
+        naming - e.g. 5, 6 or 7 for redhat/centos, "precise," "wheezy," etc.
         for Ubuntu/Debian"""
         if self.n == 'redhat':
             return re.sub(r'^rhel(\d).*$', r'\1', build_os)
@@ -173,7 +173,7 @@ class Distro(object):
             raise Exception("BUG: unsupported platform?")
 
     def build_os(self):
-        """Return the build os label in the binary package to download ("rhel57" and "rhel62" 
+        """Return the build os label in the binary package to download ("rhel57" and "rhel62"
         for redhat, "ubuntu1204" for Ubuntu and Debian)"""
 
         if re.search("^(debian|ubuntu)", self.n):
@@ -208,7 +208,7 @@ def main(argv):
     try:
         # Download the binaries.
         urlfmt="http://downloads.mongodb.com/linux/mongodb-linux-%s-enterprise-%s-latest.tgz?%s"
-    
+
         # Build a pacakge for each distro/spec/arch tuple, and
         # accumulate the repository-layout directories.
         for (distro, spec, arch) in crossproduct(distros, specs, ARCHES):
@@ -219,7 +219,7 @@ def main(argv):
 
             repo = make_package(distro, build_os, arch, spec, srcdir)
             make_repo(repo, distro, build_os, spec)
-    
+
     finally:
         os.chdir(oldcwd)
     if "-n" not in flags:
@@ -234,7 +234,7 @@ def parse_args(args):
 
 Options:
 
-  -n:  Just build the packages, don't publish them as a repo 
+  -n:  Just build the packages, don't publish them as a repo
        or clean out the working directory
 
 Each SPEC is a mongodb version string optionally followed by a colon
@@ -298,7 +298,7 @@ def ensure_dir(filename):
         exc=sys.exc_value
         if exc.errno == errno.EEXIST:
             pass
-        else: 
+        else:
             raise exc
     return filename
 
@@ -354,7 +354,7 @@ def make_package(distro, build_os, arch, spec, srcdir):
         sysassert(["sh", "-c", "(cd \"%s\" && git archive r%s %s/ ) | (cd \"%s\" && tar xvf -)" % (srcdir, spec.version(), pkgdir, sdir)])
     # Splat the binaries and snmp files under sdir.  The "build" stages of the
     # packaging infrastructure will move the files to wherever they
-    # need to go.  
+    # need to go.
     unpack_binaries_into(build_os, arch, spec, sdir)
     # Remove the mongosniff binary due to libpcap dynamic
     # linkage.  FIXME: this removal should go away
@@ -516,7 +516,7 @@ def move_repos_into_place(src, dst):
             exc=sys.exc_value
             if exc.errno == errno.EEXIST:
                 pass
-            else: 
+            else:
                 raise exc
         i=i+1
 
@@ -534,7 +534,7 @@ def move_repos_into_place(src, dst):
                exc=sys.exc_value
                if exc.errno == errno.EEXIST:
                    pass
-               else: 
+               else:
                    raise exc
 
     os.rename(tmpnam, dst)
