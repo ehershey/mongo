@@ -79,7 +79,7 @@ do
     tempfile=$(mktemp /tmp/ReleaseXXXXXX)
     tempfile2=$(mktemp /tmp/ReleaseXXXXXX)
     mv Release $tempfile
-    head -8 $tempfile > $tempfile2
+    head -7 $tempfile > $tempfile2
     apt-ftparchive release . >> $tempfile2
     cp $tempfile2 Release
     chmod 644 Release
