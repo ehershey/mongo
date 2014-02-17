@@ -207,7 +207,7 @@ def main(argv):
     os.chdir(prefix)
     try:
         # Download the binaries.
-        urlfmt="http://downloads.mongodb.com/linux/mongodb-linux-%s-enterprise-%s-latest.tgz?%s"
+        urlfmt="http://downloads.mongodb.com/linux/mongodb-linux-%s-enterprise-%s-%s.tgz"
 
         # Build a pacakge for each distro/spec/arch tuple, and
         # accumulate the repository-layout directories.
