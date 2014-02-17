@@ -4,14 +4,14 @@
 #
 # Create new repo directory under /var/www-enterprise/repo.consolidated
 # containing every deb and every rpm under /var/www-enterprise/ with proper
-# repo metadata for apt and yum 
+# repo metadata for apt and yum
 #
 
 source_dir=/var/www-enterprise/
 
 repodir=/var/www-enterprise/repo.consolidated
 
-gpg_recip='<richard@10gen.com>' 
+gpg_recip='<richard@10gen.com>'
 
 stable_branch="2.4"
 unstable_branch="2.5"
@@ -28,12 +28,12 @@ mkdir -p "$repodir/yum/redhat"
 #
 if [ ! -e "$repodir/yum/redhat/6Server" ]
 then
-  ln -s 6 "$repodir/yum/redhat/6Server" 
+  ln -s 6 "$repodir/yum/redhat/6Server"
 fi
 
 if [ ! -e "$repodir/yum/redhat/5Server" ]
 then
-  ln -s 5 "$repodir/yum/redhat/5Server" 
+  ln -s 5 "$repodir/yum/redhat/5Server"
 fi
 
 echo "Scanning and copying package files from $source_dir"
@@ -46,15 +46,15 @@ do
   if echo "$new_package_location" | grep -q /repo/
   then
     continue
-  fi  
+  fi
 
   # skip if not enterprise package
   #
   if ! echo "$new_package_location" | grep -q enterprise
   then
     continue
-  fi 
-  # skip if it's already there 
+  fi
+  # skip if it's already there
   #
   if [ -e "$new_package_location" -a "$(basename "$package")" != "Release" ]
   then
@@ -69,7 +69,7 @@ echo
 
 # packages are in place, now create metadata
 #
-for debian_dir in "$repodir"/apt/ubuntu "$repodir"/apt/debian 
+for debian_dir in "$repodir"/apt/ubuntu "$repodir"/apt/debian
 do
   cd "$debian_dir"
   for section_dir in $(find dists -type d -name non-free)
@@ -107,7 +107,7 @@ done
 # Create symlinks for stable and unstable branches
 #
 # Examples:
-# 
+#
 # /var/www-enterprise/repo.consolidated/yum/redhat/5/mongodb-enterprise/unstable -> 2.5
 # /var/www-enterprise/repo.consolidated/yum/redhat/6/mongodb-enterprise/unstable -> 2.5
 # /var/www-enterprise/repo.consolidated/apt/ubuntu/dists/precise/mongodb-enterprise/unstable -> 2.5
