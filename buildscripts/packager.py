@@ -98,7 +98,7 @@ class Spec(object):
         if re.search("^(debian|ubuntu)", distro.name()):
             return re.sub("-", "~", self.ver)                
         elif re.search("(redhat|fedora|centos)", distro.name()):
-            return re.sub("\\d+-", "", self.ver)
+            return re.sub("-rc\\d+", "", self.ver)
         else:
             raise Exception("BUG: unsupported platform?")
 
@@ -600,7 +600,7 @@ def make_rpm(distro, arch, spec, srcdir):
     oldcwd=os.getcwd()
     os.chdir(sdir+"/../")
     try:
-        sysassert(["tar", "-cpzf", topdir+"SOURCES/mongodb%s-%s.tar.gz" % (suffix, spec.pversion(distro)), os.path.basename(os.path.dirname(sdir))])
+        sysassert(["tar", "-cpzf", topdir+"SOURCES/mongodb%s-%s.tar.gz" % (suffix, spec.version()), os.path.basename(os.path.dirname(sdir))])
     finally:
         os.chdir(oldcwd)
     # Do the build.

@@ -1,6 +1,6 @@
 %define version 2.6.0
 %define rctag rc0
-%define release 0.1.%{rctag}{?dist}
+%define release 0.1.%{rctag}%{?dist}
 
 Name: mongodb-enterprise
 Conflicts: mongo-10gen, mongo-10gen-enterprise, mongo-10gen-enterprise-server, mongo-10gen-server, mongo-10gen-unstable, mongo-10gen-unstable-enterprise, mongo-10gen-unstable-enterprise-mongos, mongo-10gen-unstable-enterprise-server, mongo-10gen-unstable-enterprise-shell, mongo-10gen-unstable-enterprise-tools, mongo-10gen-unstable-mongos, mongo-10gen-unstable-server, mongo-10gen-unstable-shell, mongo-10gen-unstable-tools, mongo18-10gen, mongo18-10gen-server, mongo20-10gen, mongo20-10gen-server, mongodb, mongodb-server, mongodb-dev, mongodb-clients, mongodb-10gen, mongodb-10gen-enterprise, mongodb-10gen-unstable, mongodb-10gen-unstable-enterprise, mongodb-10gen-unstable-enterprise-mongos, mongodb-10gen-unstable-enterprise-server, mongodb-10gen-unstable-enterprise-shell, mongodb-10gen-unstable-enterprise-tools, mongodb-10gen-unstable-mongos, mongodb-10gen-unstable-server, mongodb-10gen-unstable-shell, mongodb-10gen-unstable-tools, mongodb-enterprise-unstable, mongodb-enterprise-unstable-mongos, mongodb-enterprise-unstable-server, mongodb-enterprise-unstable-shell, mongodb-enterprise-unstable-tools, mongodb-nightly, mongodb-org, mongodb-org-mongos, mongodb-org-server, mongodb-org-shell, mongodb-org-tools, mongodb-stable, mongodb18-10gen, mongodb20-10gen, mongodb-org-unstable, mongodb-org-unstable-mongos, mongodb-org-unstable-server, mongodb-org-unstable-shell, mongodb-org-unstable-tools
@@ -103,14 +103,6 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/mongodb
 mkdir -p $RPM_BUILD_ROOT/var/log/mongodb
 mkdir -p $RPM_BUILD_ROOT/var/run/mongodb
 touch $RPM_BUILD_ROOT/var/log/mongodb/mongod.log
-%doc snmp/MONGOD-MIB.txt
-%doc snmp/MONGODBINC-MIB.txt
-%doc snmp/mongod.conf.master
-%doc snmp/mongod.conf.subagent
-%doc snmp/README-snmp.txt
-%doc LICENSE.txt
-%doc README
-%doc THIRD-PARTY-NOTICES
 
 %clean
 rm -rf $RPM_BUILD_ROOT
@@ -154,6 +146,16 @@ fi
 %attr(0755,mongodb,mongodb) %dir /var/log/mongodb
 %attr(0755,mongodb,mongodb) %dir /var/run/mongodb
 %attr(0640,mongodb,mongodb) %config(noreplace) %verify(not md5 size mtime) /var/log/mongodb/mongod.log
+%doc snmp/MONGOD-MIB.txt
+%doc snmp/MONGODBINC-MIB.txt
+%doc snmp/mongod.conf.master
+%doc snmp/mongod.conf.subagent
+%doc snmp/README-snmp.txt
+%doc LICENSE.txt
+%doc README
+%doc THIRD-PARTY-NOTICES
+
+
 
 %files shell
 %defattr(-,root,root,-)
