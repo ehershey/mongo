@@ -21,10 +21,10 @@ build-stamp: configure-stamp
 	# THE FOLLOWING LINE IS INTENTIONALLY COMMENTED. 
 	# scons 
 	#docbook-to-man debian/mongodb.sgml > mongodb.1
-	echo -n > debian/mongodb-enterprise-unstable-tools.manpages
+	echo -n > debian/mongodb-enterprise-tools.manpages
 	for binary in ${TOOLS} ; \
 	do \
-	  echo debian/$$binary.1 >> debian/mongodb-enterprise-unstable-tools.manpages
+	  echo debian/$$binary.1 >> debian/mongodb-enterprise-tools.manpages ; \
 	done
 
 	echo debian/mongo.1 > debian/mongodb-enterprise-shell.manpages
