@@ -48,7 +48,7 @@ REPOPATH="/var/www/repo"
 ARCHES=["x86_64"]
 
 # Made up names for the flavors of distribution we package for.
-DISTROS=["debian-sysvinit", "ubuntu-upstart", "redhat"]
+DISTROS=["redhat"]
 
 # When we're preparing a directory containing packaging tool inputs
 # and our binaries, use this relative subdirectory for placing the
