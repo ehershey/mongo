@@ -47,8 +47,7 @@ namespace mongo {
             : doc(*targetDoc)
             , elementToRemove(doc.end())
             , pathFoundIndex(0)
-            , pathFoundElement(doc.end())
-            , pathPositionalPart() {
+            , pathFoundElement(doc.end()) {
         }
 
         // Document that is going to be changed.
@@ -62,9 +61,6 @@ namespace mongo {
 
         // Element corresponding to _fieldRef[0.._idxFound].
         mutablebson::Element pathFoundElement;
-
-        // Value to bind to a $-positional field, if one is provided.
-        std::string pathPositionalPart;
     };
 
     ModifierPop::ModifierPop()
@@ -76,7 +72,8 @@ namespace mongo {
     ModifierPop::~ModifierPop() {
     }
 
-    Status ModifierPop::init(const BSONElement& modExpr, const Options& opts) {
+    Status ModifierPop::init(const BSONElement& modExpr, const Options& opts,
+                             bool* positional) {
         //
         // field name analysis
         //
@@ -95,6 +92,10 @@ namespace mongo {
         bool foundDollar = fieldchecker::isPositional(_fieldRef,
                                                       &_positionalPathIndex,
                                                       &foundCount);
+
+        if (positional)
+            *positional = foundDollar;
+
         if (foundDollar && foundCount > 1) {
             return Status(ErrorCodes::BadValue,
                           str::stream() << "Too many positional (i.e. '$') elements found in path '"
@@ -129,8 +130,7 @@ namespace mongo {
                                                "needed from the query. Unexpanded update: "
                                             << _fieldRef.dottedField());
             }
-            _preparedState->pathPositionalPart = matchedField.toString();
-            _fieldRef.setPart(_positionalPathIndex, _preparedState->pathPositionalPart);
+            _fieldRef.setPart(_positionalPathIndex, matchedField);
         }
 
         // Locate the field name in 'root'. Note that if we don't have the full path in the
@@ -189,12 +189,13 @@ namespace mongo {
         const bool pathExists = _preparedState->pathFoundElement.ok() &&
             (_preparedState->pathFoundIndex == (_fieldRef.numParts() - 1));
 
+        if (!pathExists)
+            return logBuilder->addToUnsets(_fieldRef.dottedField());
+
         // value for the logElement ("field.path.name": <value>)
-        mutablebson::Element logElement = pathExists ?
-            doc.makeElementWithNewFieldName(
-                _fieldRef.dottedField(),
-                _preparedState->pathFoundElement) :
-            doc.makeElementBool(_fieldRef.dottedField(), true);
+        mutablebson::Element logElement = doc.makeElementWithNewFieldName(
+                                                            _fieldRef.dottedField(),
+                                                            _preparedState->pathFoundElement);
 
         if (!logElement.ok()) {
             return Status(ErrorCodes::InternalError,
@@ -202,10 +203,6 @@ namespace mongo {
                                         << "set '" << _fieldRef.dottedField() << "' -> "
                                         << _preparedState->pathFoundElement.toString() );
         }
-
-        // Now, we attach the {<fieldname>: <value>} Element under the {$op: ...} one.
-        return pathExists ?
-            logBuilder->addToSets(logElement) :
-            logBuilder->addToUnsets(logElement);
+        return logBuilder->addToSets(logElement);
     }
 } // namespace mongo

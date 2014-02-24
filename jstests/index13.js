@@ -60,12 +60,14 @@ assertResultsAndIndexBounds( { 'a.b':[[ 1, 1 ]], 'a.c':[[ MIN, MAX ]] },
 
 
 // Cases relating to parse order and inclusion of intersected ranges.
+/*
 assertResultsAndIndexBounds( { 'a.b':[[ 1, 1 ]], 'a.c':[[ MIN, MAX ]] },
                              { 'a.b':1, a:{ $elemMatch:{ b:{ $gt:0 }, c:1 } } } );
 assertResultsAndIndexBounds( { 'a.b':[[ 1, 1 ]], 'a.c':[[ MIN, MAX ]] },
                              { 'a.b':1, a:{ $elemMatch:{ b:{ $gt:0 }, c:1 } } } );
 assertResultsAndIndexBounds( { 'a.b':[[ 1, 1 ]], 'a.c':[[ MIN, MAX ]] },
                              { a:{ $elemMatch:{ b:1, c:1 } }, 'a.b':1 } );
+*/
 
 // QUERY MIGRATION
 // Bounds with elem match
@@ -77,7 +79,7 @@ assertResultsAndIndexBounds( { 'a.b':[[ 1, 1 ]], 'a.c':[[ MIN, MAX ]] },
 //                             { a:{ $elemMatch:{ b:1, c:1 } }, 'a.b':{ $gt:0 } } );
 
 // Cases with $elemMatch on multiple fields.
-t.remove(); 
+t.remove({});
 index = { 'a.b':1, 'a.c':1, 'd.e':1, 'd.f':1 };
 t.ensureIndex( index );
 t.insert( { a:[ { b:1 }, { c:1 } ], d: { e:1, f:1 } } );
@@ -113,7 +115,7 @@ assert.eq( 4, t.count() );
 
 
 // Cases with nested $elemMatch.
-t.remove()
+t.remove({})
 index = { 'a.b.c':1, 'a.b.d' :1 };
 t.ensureIndex( index );
 t.insert( { a:[ { b: [ { c : 1, d : 1 } ] } ] } ) ;

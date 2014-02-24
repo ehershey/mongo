@@ -30,7 +30,10 @@
 
 #include "mongo/db/ops/count.h"
 
+#include "mongo/db/client.h"
 #include "mongo/db/clientcursor.h"
+#include "mongo/db/catalog/database.h"
+#include "mongo/db/catalog/collection.h"
 #include "mongo/db/query/get_runner.h"
 
 namespace mongo {
@@ -61,52 +64,34 @@ namespace mongo {
         return num;
     }
 
-    long long runCount( const char *ns, const BSONObj &cmd, string &err, int &errCode ) {
+    long long runCount( const string& ns, const BSONObj &cmd, string &err, int &errCode ) {
         // Lock 'ns'.
         Client::Context cx(ns);
+        Collection* collection = cx.db()->getCollection(ns);
 
-        NamespaceDetails *d = nsdetails(ns);
-        if (NULL == d) {
+        if (NULL == collection) {
             err = "ns missing";
             return -1;
         }
 
         BSONObj query = cmd.getObjectField("query");
-        long long count = 0;
-        long long skip = cmd["skip"].numberLong();
-        long long limit = cmd["limit"].numberLong();
-
-        if (limit < 0) {
-            limit = -limit;
-        }
+        const std::string hint = cmd.getStringField("hint");
+        const BSONObj hintObj = hint.empty() ? BSONObj() : BSON("$hint" << hint);
         
         // count of all objects
         if (query.isEmpty()) {
-            return applySkipLimit(d->numRecords(), cmd);
-        }
-
-        CanonicalQuery* cq;
-        // We pass -limit because a positive limit means 'batch size' but negative limit is a
-        // hard limit.
-        if (!CanonicalQuery::canonicalize(ns, query, skip, -limit, &cq).isOK()) {
-            uasserted(17220, "could not canonicalize query " + query.toString());
-            return -2;
+            return applySkipLimit(collection->numRecords(), cmd);
         }
 
         Runner* rawRunner;
-        if (!getRunner(cq, &rawRunner).isOK()) {
-            uasserted(17221, "could not get runner " + query.toString());
-            return -2;
-        }
-
+        uassertStatusOK(getRunnerCount(collection, query, hintObj, &rawRunner));
         auto_ptr<Runner> runner(rawRunner);
-        auto_ptr<DeregisterEvenIfUnderlyingCodeThrows> safety;
 
         try {
-            ClientCursor::registerRunner(runner.get());
+            const ScopedRunnerRegistration safety(runner.get());
             runner->setYieldPolicy(Runner::YIELD_AUTO);
-            safety.reset(new DeregisterEvenIfUnderlyingCodeThrows(runner.get()));
 
+            long long count = 0;
             Runner::RunnerState state;
             while (Runner::RUNNER_ADVANCED == (state = runner->getNext(NULL, NULL))) {
                 ++count;
@@ -114,7 +99,7 @@ namespace mongo {
 
             // Emulate old behavior and return the count even if the runner was killed.  This
             // happens when the underlying collection is dropped.
-            return count;
+            return applySkipLimit(count, cmd);
         }
         catch (const DBException &e) {
             err = e.toString();

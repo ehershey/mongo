@@ -15,26 +15,20 @@ for( i = 0; i < 40; ++i ) {
 
 function memoryException( sortSpec, querySpec ) {
     querySpec = querySpec || {};
+    var ex = assert.throws( function() {
+        t.find( querySpec ).sort( sortSpec ).batchSize( 1000 ).itcount()
+    } );
+    assert( ex.toString().match( /sort/ ) );
     assert.throws( function() {
-                  t.find( querySpec ).sort( sortSpec ).batchSize( 1000 ).itcount()
-                  } );
-    assert( db.getLastError().match( /sort/ ) );
-    assert.throws( function() {
-                  t.find( querySpec ).sort( sortSpec ).batchSize( 1000 ).explain( true )
-                  } );
-    assert( db.getLastError().match( /sort/ ) );
+        t.find( querySpec ).sort( sortSpec ).batchSize( 1000 ).explain( true )
+    } );
+    assert( ex.toString().match( /sort/ ) );
 }
 
 function noMemoryException( sortSpec, querySpec ) {
     querySpec = querySpec || {};
     t.find( querySpec ).sort( sortSpec ).batchSize( 1000 ).itcount();
-    if ( 0 ) { // SERVER-5016
-    assert( !db.getLastError() );
-    }
     t.find( querySpec ).sort( sortSpec ).batchSize( 1000 ).explain( true );
-    if ( 0 ) { // SERVER-5016
-    assert( !db.getLastError() );
-    }
 }
 
 // Unindexed sorts.
@@ -66,8 +60,5 @@ noMemoryException( {_id:1}, {b:null} );
 
 // With an unindexed plan on b:1 recorded for a query, the query should be
 // retried when the unindexed plan exhausts its memory limit.
-//
-// QUERY_MIGRATION: the _id index actually performs the best in this case...
-// assert.eq( 'BtreeCursor b_1', t.find( {b:0} ).sort( {_id:1} ).explain().cursor ); // Record b:1 plan
 noMemoryException( {_id:1}, {b:null} );
 t.drop();

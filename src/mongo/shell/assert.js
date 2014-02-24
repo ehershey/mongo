@@ -246,6 +246,15 @@ assert.commandFailed = function(res, msg){
     doassert("command worked when it should have failed: " + tojson(res) + " : " + msg);
 }
 
+assert.commandFailedWithCode = function(res, code, msg){
+    if (assert._debug && msg) print("in assert for: " + msg);
+
+    assert(!res.ok, "Command result indicates success, but expected failure with code " + code +
+          ": " + tojson(res));
+    assert.eq(res.code, code, "Expected failure code did not match actual in command result: " +
+              tojson(res));
+}
+
 assert.isnull = function(what, msg){
     if (assert._debug && msg) print("in assert for: " + msg);
 
@@ -309,6 +318,24 @@ assert.close = function(a, b, msg, places){
               " places, diff: " + (a-b) + " : " + msg);
 };
 
+/**
+ * Asserts if the times in millis are not withing delta milliseconds, in either direction.
+ * Default Delta: 1 second
+ */
+assert.closeWithinMS = function(a, b, msg, deltaMS) {
+    "use strict";
+    if (deltaMS === undefined) {
+        deltaMS = 1000;
+    }
+    var aMS = a instanceof Date ? a.getTime() : a;
+    var bMS = b instanceof Date ? b.getTime() : b;
+    var actualDelta = Math.abs(Math.abs(aMS) - Math.abs(bMS));
+    if (actualDelta <= deltaMS) return;
+
+    doassert(a + " is not equal to " + b + " within " + deltaMS +
+              " millis, actual delta: " + actualDelta + " millis : " + msg);
+};
+
 assert.gleSuccess = function(db, msg) {
     var gle = db.getLastErrorObj();
     if (gle.err) {
@@ -329,10 +356,10 @@ assert.gleError = function(db, msg) {
 
 assert.gleErrorCode = function(db, code, msg) {
     var gle = db.getLastErrorObj();
-    if (gle.err && (gle.code == code)) {
+    if (!gle.err || gle.code != code) {
         if (typeof(msg) == "function") 
             msg = msg(gle);
-        doassert("getLastError not null or missing code( " + code + "): " 
+        doassert("getLastError is null or has code other than \"" + code + "\": "
                  + tojson(gle) + " :" + msg);
     }
 }

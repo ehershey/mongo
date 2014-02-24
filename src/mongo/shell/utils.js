@@ -8,6 +8,17 @@ chatty = function(s){
         print( s );
 }
 
+function reconnect(db) {
+    assert.soon(function() {
+                    try {
+                        db.runCommand({ping:1});
+                        return true;
+                    } catch (x) {
+                        return false;
+                    }
+                });
+};
+
 // Please consider using bsonWoCompare instead of this as much as possible.
 friendlyEqual = function( a , b ){
     if ( a == b )
@@ -229,13 +240,12 @@ if ( typeof _threadInject != "undefined" ){
                                    "jstests/opcounters.js",
                                    "jstests/currentop.js", // SERVER-8673, plus rwlock yielding issues
                                    "jstests/set_param1.js", // changes global state
-                                   "jstests/geo_update_btree2.js" // SERVER-11132 test disables table scans
+                                   "jstests/geo_update_btree2.js", // SERVER-11132 test disables table scans
                                   ] );
         
         // some tests can't be run in parallel with each other
         var serialTestsArr = [ "jstests/fsync.js",
                                "jstests/auth1.js",
-                               "jstests/auth_copydb2.js",
                                "jstests/connection_status.js",
                                "jstests/validate_user_documents.js"
 //                              ,"jstests/fsync2.js" // SERVER-4243
@@ -421,37 +431,7 @@ jsTest.randomize = function( seed ) {
     print( "Random seed for test : " + seed ) 
 }
 
-/**
-* Adds a user to the admin DB on the given connection. This is only used for running the test suite
-* with authentication enabled.
-*/
-jsTest.addAuth = function(conn) {
-    // Get a connection over localhost so that the first user can be added.
-    var localconn = conn;
-    if ( localconn.host.indexOf('localhost') != 0 ) {
-        print( 'Getting locahost connection instead of ' + conn + ' to add first admin user' );
-        var hosts = conn.host.split(',');
-        for ( var i = 0; i < hosts.length; i++ ) {
-            hosts[i] = 'localhost:' + hosts[i].split(':')[1];
-        }
-        localconn = new Mongo(hosts.join(','));
-    }
-    print ("Adding admin user on connection: " + localconn);
-    try {
-        localconn._skipAuth = true; // Make sure we don't try to authenticate the conn while adding the user
-        return localconn.getDB('admin').createUser({user: jsTestOptions().adminUser,
-                                                    pwd: jsTestOptions().adminPassword,
-                                                    roles: ["__system"]},
-                                                   {w: 'majority', wtimeout: 60000});
-    } finally {
-        localconn._skipAuth = false;
-    }
-}
-
 jsTest.authenticate = function(conn) {
-    if (conn._skipAuth) { // To prevent us from trying to authenticate while in the process of adding user.
-        return true;
-    }
     if (!jsTest.options().auth && !jsTest.options().keyFile && !jsTest.options().useX509) {
         conn.authenticated = true;
         return true;
@@ -462,13 +442,12 @@ jsTest.authenticate = function(conn) {
             // Set authenticated to stop an infinite recursion from getDB calling
             // back into authenticate.
             conn.authenticated = true;
-            print ("Authenticating to admin database as " +
-                   jsTestOptions().adminUser + " with mechanism " +
+            print ("Authenticating as internal " + jsTestOptions().authUser + " user with mechanism " +
                    DB.prototype._defaultAuthenticationMechanism +
                    " on connection: " + conn);
             conn.authenticated = conn.getDB('admin').auth({
-                user: jsTestOptions().adminUser,
-                pwd: jsTestOptions().adminPassword
+                user: jsTestOptions().authUser,
+                pwd: jsTestOptions().authPassword,
             });
             return conn.authenticated;
         }, "Authenticating connection: " + conn, 5000, 1000);
@@ -865,7 +844,12 @@ shellHelper.show = function (what) {
     }
 
     if (what == "users") {
-        db.system.users.find().forEach(printjson);
+        db.getUsers().forEach(printjson);
+        return "";
+    }
+
+    if (what == "roles") {
+        db.getRoles({showBuiltinRoles: true}).forEach(printjson);
         return "";
     }
 

@@ -134,7 +134,18 @@ namespace replset {
 
     void BackgroundSync::notifierThread() {
         Client::initThread("rsSyncNotifier");
-        theReplSet->syncSourceFeedback.ensureMe();
+        bool meEnsured = false;
+        while (!inShutdown() && !meEnsured) {
+            try {
+                theReplSet->syncSourceFeedback.ensureMe();
+                meEnsured = true;
+            }
+            catch (const DBException& e) {
+                warning() << "failed to initiate notifier thread: " << e.what()
+                          << " trying again in one second";
+                sleepsecs(1);
+            }
+        }
         replLocalAuth();
 
         // This makes the initial connection to our sync source for oplog position notification.
@@ -439,6 +450,8 @@ namespace replset {
                 boost::unique_lock<boost::mutex> lock(_mutex);
                 _lastH = o["h"].numberLong();
                 _lastOpTimeFetched = o["ts"]._opTime();
+                LOG(3) << "replSet lastOpTimeFetched: "
+                       << _lastOpTimeFetched.toStringPretty() << rsLog;
             }
         }
     }
@@ -491,7 +504,6 @@ namespace replset {
             log() << "replSet remoteOldestOp:    " << remoteTs.toStringLong() << rsLog;
             log() << "replSet lastOpTimeFetched: " << _lastOpTimeFetched.toStringLong() << rsLog;
         }
-        LOG(3) << "replSet remoteOldestOp: " << remoteTs.toStringLong() << rsLog;
 
         {
             boost::unique_lock<boost::mutex> lock(_mutex);

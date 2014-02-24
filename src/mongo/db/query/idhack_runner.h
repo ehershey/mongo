@@ -43,14 +43,17 @@ namespace mongo {
     class DiskLoc;
     class PlanStage;
     class TypeExplain;
+    struct PlanInfo;
 
     /**
      */
     class IDHackRunner : public Runner {
     public:
 
-        /** Takes ownership of all the arguments. */
-        IDHackRunner(Collection* collection, CanonicalQuery* query);
+        /** Takes ownership of all the arguments -collection. */
+        IDHackRunner(const Collection* collection, CanonicalQuery* query);
+
+        IDHackRunner(Collection* collection, const BSONObj& key);
 
         virtual ~IDHackRunner();
 
@@ -64,19 +67,23 @@ namespace mongo {
 
         virtual void setYieldPolicy(Runner::YieldPolicy policy);
 
-        virtual void invalidate(const DiskLoc& dl);
+        virtual void invalidate(const DiskLoc& dl, InvalidationType type);
 
         virtual const std::string& ns();
 
         virtual void kill();
 
-        /**
-         */
-        virtual Status getExplainPlan(TypeExplain** explain) const;
+        virtual const Collection* collection() { return _collection; }
+
+        virtual Status getInfo(TypeExplain** explain,
+                               PlanInfo** planInfo) const;
 
     private:
         // Not owned here.
-        Collection* _collection;
+        const Collection* _collection;
+
+        // The value to match against the _id field.
+        BSONObj _key;
 
         // TODO: When we combine the canonicalize and getRunner steps into one we can get rid of
         // this.
@@ -94,6 +101,12 @@ namespace mongo {
         // If we're yielding to fetch a document, what is it's diskloc?  It may be invalidated
         // while we're yielded.
         DiskLoc _locFetching;
+
+        // Number of index keys scanned: should be either 0 or 1.
+        int _nscanned;
+
+        // Number of objects scanned: should be either 0 or 1.
+        int _nscannedObjects;
     };
 
 }  // namespace mongo

@@ -15,7 +15,10 @@
 
 #pragma once
 
+#include "mongo/base/status.h"
 #include "mongo/base/string_data.h"
+#include "mongo/client/dbclientinterface.h"
+#include "mongo/client/export_macros.h"
 
 namespace mongo {
 namespace auth {
@@ -24,8 +27,19 @@ namespace auth {
      * Hashes the password so that it can be stored in a user object or used for MONGODB-CR
      * authentication.
      */
-    std::string createPasswordDigest(const StringData& username,
+    std::string MONGO_CLIENT_API createPasswordDigest(const StringData& username,
                                      const StringData& clearTextPassword);
+
+    /**
+     * Retrieves the schema version of the persistent data describing users and roles from the
+     * remote server connected to with conn.
+     */
+    Status getRemoteStoredAuthorizationVersion(DBClientBase* conn, int* outVersion);
+
+    /**
+     * Name of the server parameter used to report the auth schema version (via getParameter).
+     */
+    extern const std::string schemaVersionServerParameter;
 
 }  // namespace auth
 }  // namespace mongo

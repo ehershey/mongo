@@ -107,7 +107,7 @@ namespace mongo {
         bool isDocReplacement() const;
 
         bool modsAffectIndices() const;
-        void refreshIndexKeys(const IndexPathSet& indexedFields);
+        void refreshIndexKeys(const IndexPathSet* indexedFields);
 
         bool multi() const;
         void setMulti(bool multi);
@@ -123,6 +123,18 @@ namespace mongo {
 
         ModifierInterface::ExecInfo::UpdateContext context() const;
         void setContext(ModifierInterface::ExecInfo::UpdateContext context);
+
+        mutablebson::Document& getDocument() {
+            return _objDoc;
+        }
+
+        const mutablebson::Document& getDocument() const {
+            return _objDoc;
+        }
+
+        bool needMatchDetails() const {
+            return _positional;
+        }
 
     private:
 
@@ -146,8 +158,8 @@ namespace mongo {
         // What are the list of fields in the collection over which the update is going to be
         // applied that participate in indices?
         //
-        // TODO: Do we actually need to keep a copy of this?
-        IndexPathSet _indexedFields;
+        // NOTE: Owned by the collection's info cache!.
+        const IndexPathSet* _indexedFields;
 
         //
         // mutable properties after parsing
@@ -169,9 +181,16 @@ namespace mongo {
         // at each call to update.
         bool _affectIndices;
 
+        // Do any of the mods require positional match details when calling 'prepare'?
+        bool _positional;
+
         // Is this update going to be an upsert?
         ModifierInterface::ExecInfo::UpdateContext _context;
 
+        // The document used to represent or store the object being updated.
+        mutablebson::Document _objDoc;
+
+        // The document used to build the oplog entry for the update.
         mutablebson::Document _logDoc;
     };
 

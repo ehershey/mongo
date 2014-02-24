@@ -31,15 +31,14 @@
 #include "mongo/db/pipeline/pipeline_d.h"
 
 #include "mongo/client/dbclientinterface.h"
-#include "mongo/db/cursor.h"
+#include "mongo/db/catalog/collection.h"
 #include "mongo/db/instance.h"
-#include "mongo/db/parsed_query.h"
+#include "mongo/db/pdfile.h"
 #include "mongo/db/pipeline/document_source.h"
 #include "mongo/db/pipeline/pipeline.h"
 #include "mongo/db/query/get_runner.h"
 #include "mongo/db/query/query_planner.h"
 #include "mongo/s/d_logic.h"
-
 
 namespace mongo {
 
@@ -55,8 +54,8 @@ namespace {
 
         bool isCapped(const NamespaceString& ns) {
             Client::ReadContext ctx(ns.ns());
-            NamespaceDetails* nsd = nsdetails(ns.ns());
-            return nsd && nsd->isCapped();
+            Collection* collection = ctx.ctx().db()->getCollection(ns);
+            return collection && collection->isCapped();
         }
 
     private:
@@ -101,29 +100,13 @@ namespace {
             sources.pop_front();
         }
 
+        // Find the set of fields in the source documents depended on by this pipeline.
+        const DepsTracker deps = pPipeline->getDependencies(queryObj);
 
-        /* Look for an initial simple project; we'll avoid constructing Values
-         * for fields that won't make it through the projection.
-         */
-
-        bool haveProjection = false;
-        BSONObj projection;
-        DocumentSource::ParsedDeps dependencies;
-        {
-            set<string> deps;
-            DocumentSource::GetDepsReturn status = DocumentSource::SEE_NEXT;
-            for (size_t i=0; i < sources.size() && status == DocumentSource::SEE_NEXT; i++) {
-                status = sources[i]->getDependencies(deps);
-                if (deps.count(string())) // empty string means we need the full doc
-                    status = DocumentSource::NOT_SUPPORTED;
-            }
-
-            if (status == DocumentSource::EXHAUSTIVE) {
-                projection = DocumentSource::depsToProjection(deps);
-                dependencies = DocumentSource::parseDeps(deps);
-                haveProjection = true;
-            }
-        }
+        // Passing query an empty projection since it is faster to use ParsedDeps::extractFields().
+        // This will need to change to support covering indexes (SERVER-12015). There is an
+        // exception for textScore since that can only be retrieved by a query projection.
+        const BSONObj projectionForQuery = deps.needTextScore ? deps.toProjection() : BSONObj();
 
         /*
           Look for an initial sort; we'll try to add this to the
@@ -138,7 +121,7 @@ namespace {
             sortStage = dynamic_cast<DocumentSourceSort*>(sources.front().get());
             if (sortStage) {
                 // build the sort key
-                sortObj = sortStage->serializeSortKey().toBson();
+                sortObj = sortStage->serializeSortKey(/*explain*/false).toBson();
             }
         }
 
@@ -158,6 +141,16 @@ namespace {
         // Create the necessary context to use a Runner, including taking a namespace read lock.
         // Note: this may throw if the sharding version for this connection is out of date.
         Client::ReadContext context(fullName);
+        Collection* collection = context.ctx().db()->getCollection(fullName);
+        if ( !collection ) {
+            intrusive_ptr<DocumentSource> source(DocumentSourceBsonArray::create(BSONObj(),
+                                                                                 pExpCtx));
+            while (!sources.empty() && source->coalesce(sources.front())) {
+                sources.pop_front();
+            }
+            pPipeline->addInitialSource( source );
+            return;
+        }
 
         // Create the Runner.
         //
@@ -186,13 +179,14 @@ namespace {
         bool sortInRunner = false;
         if (sortStage) {
             CanonicalQuery* cq;
-            uassertStatusOK(CanonicalQuery::canonicalize(pExpCtx->ns,
-                                                         queryObj,
-                                                         sortObj,
-                                                         projection,
-                                                         &cq));
+            Status status =
+                CanonicalQuery::canonicalize(pExpCtx->ns,
+                                             queryObj,
+                                             sortObj,
+                                             projectionForQuery,
+                                             &cq);
             Runner* rawRunner;
-            if (getRunner(cq, &rawRunner, runnerOptions).isOK()) {
+            if (status.isOK() && getRunner(cq, &rawRunner, runnerOptions).isOK()) {
                 // success: The Runner will handle sorting for us using an index.
                 runner.reset(rawRunner);
                 sortInRunner = true;
@@ -208,11 +202,12 @@ namespace {
         if (!runner.get()) {
             const BSONObj noSort;
             CanonicalQuery* cq;
-            uassertStatusOK(CanonicalQuery::canonicalize(pExpCtx->ns,
-                                                         queryObj,
-                                                         noSort,
-                                                         projection,
-                                                         &cq));
+            uassertStatusOK(
+                CanonicalQuery::canonicalize(pExpCtx->ns,
+                                             queryObj,
+                                             noSort,
+                                             projectionForQuery,
+                                             &cq));
 
             Runner* rawRunner;
             uassertStatusOK(getRunner(cq, &rawRunner, runnerOptions));
@@ -220,8 +215,7 @@ namespace {
         }
 
         // Now wrap the Runner in ClientCursor
-        auto_ptr<ClientCursor> cursor(
-            new ClientCursor(runner.release(), QueryOption_NoCursorTimeout));
+        auto_ptr<ClientCursor> cursor(new ClientCursor(collection, runner.release()));
         verify(cursor->getRunner());
         CursorId cursorId = cursor->cursorid();
 
@@ -239,9 +233,7 @@ namespace {
         if (sortInRunner)
             pSource->setSort(sortObj);
 
-        if (haveProjection) {
-            pSource->setProjection(projection, dependencies);
-        }
+        pSource->setProjection(deps.toProjection(), deps.toParsedDeps());
 
         while (!sources.empty() && pSource->coalesce(sources.front())) {
             sources.pop_front();

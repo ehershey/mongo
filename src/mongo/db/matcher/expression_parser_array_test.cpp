@@ -104,6 +104,160 @@ namespace mongo {
         ASSERT( result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( 6 ) ) ) );
     }
 
+    // with explicit $eq
+    TEST( MatchExpressionParserArrayTest, ElemMatchDBRef1 ) {
+        OID oid = OID::gen();
+        BSONObj match = BSON( "$ref" << "coll" << "$id" << oid << "$db" << "db" );
+        OID oidx = OID::gen();
+        BSONObj notMatch = BSON( "$ref" << "coll" << "$id" << oidx << "$db" << "db" );
+
+        BSONObj query = BSON( "x" << BSON( "$elemMatch" << BSON( "$eq" << match ) ) );
+        StatusWithMatchExpression result = MatchExpressionParser::parse( query );
+        ASSERT_TRUE( result.isOK() );
+
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << match ) ) );
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( notMatch ) ) ) );
+        ASSERT( result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( match ) ) ) );
+    }
+
+    TEST( MatchExpressionParserArrayTest, ElemMatchDBRef2 ) {
+        OID oid = OID::gen();
+        BSONObj match = BSON( "$ref" << "coll" << "$id" << oid << "$db" << "db" );
+        OID oidx = OID::gen();
+        BSONObj notMatch = BSON( "$ref" << "coll" << "$id" << oidx << "$db" << "db" );
+
+        BSONObj query = BSON( "x" << BSON( "$elemMatch" << match ) );
+        StatusWithMatchExpression result = MatchExpressionParser::parse( query );
+        ASSERT_TRUE( result.isOK() );
+
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << match ) ) );
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( notMatch ) ) ) );
+        ASSERT( result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( match ) ) ) );
+    }
+
+    // Additional fields after $ref and $id.
+    TEST( MatchExpressionParserArrayTest, ElemMatchDBRef3 ) {
+        OID oid = OID::gen();
+        BSONObj match = BSON( "$ref" << "coll" << "$id" << oid << "foo" << 12345 );
+        OID oidx = OID::gen();
+        BSONObj notMatch = BSON( "$ref" << "coll" << "$id" << oidx << "foo" << 12345 );
+
+        BSONObj query = BSON( "x" << BSON( "$elemMatch" << match ) );
+        StatusWithMatchExpression result = MatchExpressionParser::parse( query );
+        ASSERT_TRUE( result.isOK() );
+
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << match ) ) );
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( notMatch ) ) ) );
+        ASSERT( result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( match ) ) ) );
+
+        // Document contains fields not referred to in $elemMatch query.
+        ASSERT( result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY(
+                BSON( "$ref" << "coll" << "$id" << oid << "foo" << 12345 << "bar" << 678 ) ) ) ) );
+    }
+
+    // Query with DBRef fields out of order.
+    TEST( MatchExpressionParserArrayTest, ElemMatchDBRef4 ) {
+        OID oid = OID::gen();
+        BSONObj match = BSON( "$ref" << "coll" << "$id" << oid << "$db" << "db" );
+        BSONObj matchOutOfOrder = BSON( "$db" << "db" << "$id" << oid << "$ref" << "coll" );
+        OID oidx = OID::gen();
+        BSONObj notMatch = BSON( "$ref" << "coll" << "$id" << oidx << "$db" << "db" );
+
+        BSONObj query = BSON( "x" << BSON( "$elemMatch" << matchOutOfOrder ) );
+        StatusWithMatchExpression result = MatchExpressionParser::parse( query );
+        ASSERT_TRUE( result.isOK() );
+
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << match ) ) );
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( notMatch ) ) ) );
+        ASSERT( result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( match ) ) ) );
+    }
+
+    // Query with DBRef fields out of order.
+    // Additional fields besides $ref and $id.
+    TEST( MatchExpressionParserArrayTest, ElemMatchDBRef5 ) {
+        OID oid = OID::gen();
+        BSONObj match = BSON( "$ref" << "coll" << "$id" << oid << "foo" << 12345 );
+        BSONObj matchOutOfOrder = BSON( "foo" << 12345 << "$id" << oid << "$ref" << "coll" );
+        OID oidx = OID::gen();
+        BSONObj notMatch = BSON( "$ref" << "coll" << "$id" << oidx << "foo" << 12345 );
+
+        BSONObj query = BSON( "x" << BSON( "$elemMatch" << matchOutOfOrder ) );
+        StatusWithMatchExpression result = MatchExpressionParser::parse( query );
+        ASSERT_TRUE( result.isOK() );
+
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << match ) ) );
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( notMatch ) ) ) );
+        ASSERT( result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( match ) ) ) );
+
+        // Document contains fields not referred to in $elemMatch query.
+        ASSERT( result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY(
+                BSON( "$ref" << "coll" << "$id" << oid << "foo" << 12345 << "bar" << 678 ) ) ) ) );
+    }
+
+    // Incomplete DBRef - $id missing.
+    TEST( MatchExpressionParserArrayTest, ElemMatchDBRef6 ) {
+        OID oid = OID::gen();
+        BSONObj match = BSON( "$ref" << "coll" << "$id" << oid << "foo" << 12345 );
+        BSONObj matchMissingID = BSON( "$ref" << "coll" << "foo" << 12345 );
+        BSONObj notMatch = BSON( "$ref" << "collx" << "$id" << oid << "foo" << 12345 );
+
+        BSONObj query = BSON( "x" << BSON( "$elemMatch" << matchMissingID ) );
+        StatusWithMatchExpression result = MatchExpressionParser::parse( query );
+        ASSERT_TRUE( result.isOK() );
+
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << match ) ) );
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( notMatch ) ) ) );
+        ASSERT( result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( match ) ) ) );
+
+        // Document contains fields not referred to in $elemMatch query.
+        ASSERT( result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY(
+                BSON( "$ref" << "coll" << "$id" << oid << "foo" << 12345 << "bar" << 678 ) ) ) ) );
+    }
+
+    // Incomplete DBRef - $ref missing.
+    TEST( MatchExpressionParserArrayTest, ElemMatchDBRef7 ) {
+        OID oid = OID::gen();
+        BSONObj match = BSON( "$ref" << "coll" << "$id" << oid << "foo" << 12345 );
+        BSONObj matchMissingRef = BSON( "$id" << oid << "foo" << 12345 );
+        OID oidx = OID::gen();
+        BSONObj notMatch = BSON( "$ref" << "coll" << "$id" << oidx << "foo" << 12345 );
+
+        BSONObj query = BSON( "x" << BSON( "$elemMatch" << matchMissingRef ) );
+        StatusWithMatchExpression result = MatchExpressionParser::parse( query );
+        ASSERT_TRUE( result.isOK() );
+
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << match ) ) );
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( notMatch ) ) ) );
+        ASSERT( result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( match ) ) ) );
+
+        // Document contains fields not referred to in $elemMatch query.
+        ASSERT( result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY(
+                BSON( "$ref" << "coll" << "$id" << oid << "foo" << 12345 << "bar" << 678 ) ) ) ) );
+    }
+
+    // Incomplete DBRef - $db only.
+    TEST( MatchExpressionParserArrayTest, ElemMatchDBRef8 ) {
+        OID oid = OID::gen();
+        BSONObj match = BSON( "$ref" << "coll" << "$id" << oid << "$db" << "db"
+                           << "foo" << 12345 );
+        BSONObj matchDBOnly = BSON( "$db" << "db" << "foo" << 12345 );
+        BSONObj notMatch = BSON( "$ref" << "coll" << "$id" << oid << "$db" << "dbx"
+                              << "foo" << 12345 );
+
+        BSONObj query = BSON( "x" << BSON( "$elemMatch" << matchDBOnly ) );
+        StatusWithMatchExpression result = MatchExpressionParser::parse( query );
+        ASSERT_TRUE( result.isOK() );
+
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << match ) ) );
+        ASSERT( !result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( notMatch ) ) ) );
+        ASSERT( result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY( match ) ) ) );
+
+        // Document contains fields not referred to in $elemMatch query.
+        ASSERT( result.getValue()->matchesBSON( BSON( "x" << BSON_ARRAY(
+                BSON( "$ref" << "coll" << "$id" << oid << "$db" << "db"
+                   << "foo" << 12345 << "bar" << 678 ) ) ) ) );
+    }
+
     TEST( MatchExpressionParserArrayTest, All1 ) {
         BSONObj query = BSON( "x" << BSON( "$all" << BSON_ARRAY( 1 << 2 ) ) );
         StatusWithMatchExpression result = MatchExpressionParser::parse( query );

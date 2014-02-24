@@ -167,17 +167,6 @@ class mongod(object):
         print >> sys.stderr, "timeout starting mongod"
         return False
 
-    def setup_admin_user(self, port=mongod_port):
-        try:
-            Connection( "localhost" , int(port), ssl=use_ssl ).admin.command("createUser", "admin",
-                                                                pwd="password",
-                                                                roles=["__system"])
-        except OperationFailure, e:
-            if e.message == 'need to login':
-                pass # SERVER-4225
-            else:
-                raise e
-
     def start(self):
         global mongod_port
         global mongod
@@ -218,11 +207,13 @@ class mongod(object):
         if self.kwargs.get('no_preallocj'):
             argv += ['--nopreallocj']
         if self.kwargs.get('auth'):
-            argv += ['--auth']
+            argv += ['--auth', '--setParameter', 'enableLocalhostAuthBypass=false']
             authMechanism = self.kwargs.get('authMechanism', 'MONGODB-CR')
             if authMechanism != 'MONGODB-CR':
                 argv += ['--setParameter', 'authenticationMechanisms=' + authMechanism]
             self.auth = True
+        if self.kwargs.get('keyFile'):
+            argv += ['--keyFile', self.kwargs.get('keyFile')]
         if self.kwargs.get('use_ssl') or self.kwargs.get('use_x509'):
             argv += ['--sslMode', "requireSSL",
                      '--sslPEMKeyFile', 'jstests/libs/server.pem',
@@ -236,9 +227,6 @@ class mongod(object):
 
         if not self.did_mongod_start(self.port):
             raise Exception("Failed to start mongod")
-
-        if self.auth:
-            self.setup_admin_user(self.port)
 
         if self.slave:
             local = Connection(port=self.port, slave_okay=True).local
@@ -481,14 +469,6 @@ def runTest(test, result):
     else:
         raise Bug("fell off in extension case: %s" % path)
 
-    if keyFile:
-        f = open(keyFile, 'r')
-        keyFileData = re.sub(r'\s', '', f.read()) # Remove all whitespace
-        f.close()
-        os.chmod(keyFile, stat.S_IRUSR | stat.S_IWUSR)
-    else:
-        keyFileData = None
-
     mongo_test_filename = os.path.basename(path)
     if 'sharedclient' in path:
         mongo_test_filename += "-sharedclient"
@@ -516,7 +496,8 @@ def runTest(test, result):
                      'TestData.authMechanism = ' + ternary( authMechanism,
                                                '"' + str(authMechanism) + '"', 'null') + ";" + \
                      'TestData.useSSL = ' + ternary( use_ssl ) + ";" + \
-                     'TestData.useX509 = ' + ternary( use_x509 ) + ";"
+                     'TestData.useX509 = ' + ternary( use_x509 ) + ";" + \
+                     'TestData.useWriteCommands = ' + ternary( use_write_commands ) + ";"
         # this updates the default data directory for mongod processes started through shell (src/mongo/shell/servers.js)
         evalString += 'MongoRunner.dataDir = "' + os.path.abspath(smoke_db_prefix + '/data/db') + '";'
         evalString += 'MongoRunner.dataPath = MongoRunner.dataDir + "/";'
@@ -615,6 +596,7 @@ def run_tests(tests):
                         no_preallocj=no_preallocj,
                         auth=auth,
                         authMechanism=authMechanism,
+                        keyFile=keyFile,
                         use_ssl=use_ssl,
                         use_x509=use_x509).__enter__()
     else:
@@ -632,6 +614,7 @@ def run_tests(tests):
                            no_preallocj=no_preallocj,
                            auth=auth,
                            authMechanism=authMechanism,
+                           keyFile=keyFile,
                            use_ssl=use_ssl,
                            use_x509=use_x509).__enter__()
             primary = Connection(port=master.port, slave_okay=True);
@@ -690,6 +673,7 @@ def run_tests(tests):
                                             no_preallocj=no_preallocj,
                                             auth=auth,
                                             authMechanism=authMechanism,
+                                            keyFile=keyFile,
                                             use_ssl=use_ssl,
                                             use_x509=use_x509).__enter__()
 
@@ -778,11 +762,66 @@ suiteGlobalConfig = {"js": ("[!_]*.js", True),
                      "ssl": ("ssl/*.js", True),
                      "sslSpecial": ("sslSpecial/*.js", True),
                      "jsCore": ("core/[!_]*.js", True),
+                     "gle": ("gle/*.js", True),
                      }
 
+def get_module_suites():
+    """Attempts to discover and return information about module test suites
+
+    Returns a dictionary of module suites in the format:
+
+    {
+        "<suite_name>" : "<full_path_to_suite_directory/[!_]*.js>",
+        ...
+    }
+
+    This means the values of this dictionary can be used as "glob"s to match all jstests in the
+    suite directory that don't start with an underscore
+
+    The module tests should be put in 'src/mongo/db/modules/<module_name>/<suite_name>/*.js'
+
+    NOTE: This assumes that if we have more than one module the suite names don't conflict
+    """
+    modules_directory = 'src/mongo/db/modules'
+    test_suites = {}
+
+    # Return no suites if we have no modules
+    if not os.path.exists(modules_directory) or not os.path.isdir(modules_directory):
+        return {}
+
+    module_directories = os.listdir(modules_directory)
+    for module_directory in module_directories:
+
+        test_directory = os.path.join(modules_directory, module_directory, "jstests")
+
+        # Skip this module if it has no "jstests" directory
+        if not os.path.exists(test_directory) or not os.path.isdir(test_directory):
+            continue
+
+        # Get all suites for this module
+        for test_suite in os.listdir(test_directory):
+            test_suites[test_suite] = os.path.join(test_directory, test_suite, "[!_]*.js")
+
+    return test_suites
+
 def expand_suites(suites,expandUseDB=True):
+    """Takes a list of suites and expands to a list of tests according to a set of rules.
+
+    Keyword arguments:
+        suites -- list of suites specified by the user
+        expandUseDB -- expand globs (such as [!_]*.js) for tests that are run against a database
+                       (default True)
+
+    This function handles expansion of globs (such as [!_]*.js), aliases (such as "client" and
+    "all"), detection of suites in the "modules" directory, and enumerating the test files in a
+    given suite.  It returns a list of tests of the form (path_to_test, usedb), where the second
+    part of the tuple specifies whether the test is run against the database (see --nodb in the
+    mongo shell)
+
+    """
     globstr = None
     tests = []
+    module_suites = get_module_suites()
     for suite in suites:
         if suite == 'all':
             return expand_suites(['test', 'perf', 'client', 'js', 'jsPerf', 'jsSlowNightly', 'jsSlowWeekly', 'clone', 'parallel', 'repl', 'auth', 'sharding', 'tool'],expandUseDB=expandUseDB)
@@ -825,6 +864,13 @@ def expand_suites(suites,expandUseDB=True):
                     usedb = suiteGlobalConfig[name][1]
                     break
             tests += [ ( os.path.join( mongo_repo , suite ) , usedb ) ]
+        elif suite in module_suites:
+            # Currently we connect to a database in all module tests since there's no mechanism yet
+            # to configure it independently
+            usedb = True
+            paths = glob.glob(module_suites[suite])
+            paths.sort()
+            tests += [(path, usedb) for path in paths]
         else:
             try:
                 globstr, usedb = suiteGlobalConfig[suite]
@@ -854,7 +900,7 @@ def add_exe(e):
 
 def set_globals(options, tests):
     global mongod_executable, mongod_port, shell_executable, continue_on_failure, small_oplog, small_oplog_rs
-    global no_journal, set_parameters, set_parameters_mongos, no_preallocj, auth, authMechanism, keyFile, smoke_db_prefix, test_path, start_mongod
+    global no_journal, set_parameters, set_parameters_mongos, no_preallocj, auth, authMechanism, keyFile, keyFileData, smoke_db_prefix, test_path, start_mongod
     global use_ssl, use_x509
     global file_of_commands_mode
     global report_file, use_write_commands
@@ -903,6 +949,14 @@ def set_globals(options, tests):
         # if only --auth was given to smoke.py, load the
         # default keyFile from jstests/libs/authTestsKey
         keyFile = os.path.join(mongo_repo, 'jstests', 'libs', 'authTestsKey')
+
+    if keyFile:
+        f = open(keyFile, 'r')
+        keyFileData = re.sub(r'\s', '', f.read()) # Remove all whitespace
+        f.close()
+        os.chmod(keyFile, stat.S_IRUSR | stat.S_IWUSR)
+    else:
+        keyFileData = None
 
     # if smoke.py is running a list of commands read from a
     # file (or stdin) rather than running a suite of js tests
@@ -1069,6 +1123,8 @@ def main():
                       action="store", help='Set the "builder name" for buildlogger')
     parser.add_option('--buildlogger-buildnum', dest='buildlogger_buildnum', default=None,
                       action="store", help='Set the "build number" for buildlogger')
+    parser.add_option('--buildlogger-url', dest='buildlogger_url', default=None,
+                      action="store", help='Set the url root for the buildlogger service')
     parser.add_option('--buildlogger-credentials', dest='buildlogger_credentials', default=None,
                       action="store", help='Path to Python file containing buildlogger credentials')
     parser.add_option('--buildlogger-phase', dest='buildlogger_phase', default=None,
@@ -1096,6 +1152,9 @@ def main():
     elif any(buildlogger_opts):
         # some but not all of the required options were sete
         raise Exception("you must set all of --buildlogger-builder, --buildlogger-buildnum, --buildlogger-credentials")
+
+    if options.buildlogger_url: #optional; if None, defaults to const in buildlogger.py
+        os.environ['BUILDLOGGER_URL'] = options.buildlogger_url
 
     if options.File:
         if options.File == '-':

@@ -4,7 +4,6 @@ var t = db.getSiblingDB("test").getCollection("fts_querylang");
 var cursor;
 var results;
 
-db.adminCommand({setParameter: 1, textSearchEnabled: true});
 db.adminCommand({setParameter: 1, newQueryFrameworkEnabled: true});
 
 t.drop();
@@ -70,7 +69,10 @@ assert.throws(function() { cursor.next() });
 
 // TODO Test $and of basic text query with geo expression.
 
-// TODO Test update with $text, once it is enabled with the new query framework.
+// Test update with $text.
+t.update({$text: {$search: "textual content -irrelevant"}}, {$set: {b: 1}}, {multi: true});
+assert.eq(2, t.find({b: 1}).itcount(),
+          'incorrect number of documents updated');
 
 // TODO Test remove with $text, once it is enabled with the new query framework.
 

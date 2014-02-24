@@ -28,6 +28,7 @@
 
 #include "mongo/db/query/planner_access.h"
 
+#include <algorithm>
 #include <vector>
 
 #include "mongo/db/matcher/expression_array.h"
@@ -39,6 +40,19 @@
 #include "mongo/db/query/qlog.h"
 #include "mongo/db/query/query_planner.h"
 #include "mongo/db/query/query_planner_common.h"
+
+namespace {
+
+    using namespace mongo;
+
+    /**
+     * Text node functors.
+     */
+    bool isTextNode(const QuerySolutionNode* node) {
+        return STAGE_TEXT == node->getType();
+    }
+
+} // namespace
 
 namespace mongo {
 
@@ -103,6 +117,10 @@ namespace mongo {
             ret->indexKeyPattern = index.keyPattern;
             ret->nq = nearExpr->getData();
             ret->baseBounds.fields.resize(index.keyPattern.nFields());
+            if (NULL != query.getProj()) {
+                ret->addPointMeta = query.getProj()->wantGeoNearPoint();
+                ret->addDistMeta = query.getProj()->wantGeoNearDistance();
+            }
             return ret;
         }
         else if (indexIs2D) {
@@ -136,8 +154,9 @@ namespace mongo {
             isn->indexIsMultiKey = index.multikey;
             isn->bounds.fields.resize(index.keyPattern.nFields());
             isn->maxScan = query.getParsed().getMaxScan();
+            isn->addKeyMetadata = query.getParsed().returnKey();
 
-            IndexBoundsBuilder::translate(expr, index.keyPattern.firstElement(),
+            IndexBoundsBuilder::translate(expr, index.keyPattern.firstElement(), index,
                                           &isn->bounds.fields[0], tightnessOut);
 
             // QLOG() << "bounds are " << isn->bounds.toString() << " exact " << *exact << endl;
@@ -152,9 +171,9 @@ namespace mongo {
         const StageType type = node->getType();
         verify(STAGE_GEO_NEAR_2D != type);
 
-        if (STAGE_GEO_2D == type) {
+        if (STAGE_GEO_2D == type || STAGE_TEXT == type) {
             // XXX: 'expr' is possibly indexed by 'node'.  Right now we don't take advantage
-            // of covering for 2d indices.
+            // of covering here (??).
             *tightnessOut = IndexBoundsBuilder::INEXACT_FETCH;
             return;
         }
@@ -193,45 +212,16 @@ namespace mongo {
         OrderedIntervalList* oil = &boundsToFillOut->fields[pos];
 
         if (boundsToFillOut->fields[pos].name.empty()) {
-            IndexBoundsBuilder::translate(expr, keyElt, oil, tightnessOut);
+            IndexBoundsBuilder::translate(expr, keyElt, index, oil, tightnessOut);
         }
         else {
             if (MatchExpression::AND == mergeType) {
-                IndexBoundsBuilder::translateAndIntersect(expr, keyElt, oil, tightnessOut);
+                IndexBoundsBuilder::translateAndIntersect(expr, keyElt, index, oil, tightnessOut);
             }
             else {
                 verify(MatchExpression::OR == mergeType);
-                IndexBoundsBuilder::translateAndUnion(expr, keyElt, oil, tightnessOut);
+                IndexBoundsBuilder::translateAndUnion(expr, keyElt, index, oil, tightnessOut);
             }
-        }
-    }
-
-    // static
-    void QueryPlannerAccess::alignBounds(IndexBounds* bounds, const BSONObj& kp, int scanDir) {
-        BSONObjIterator it(kp);
-        size_t oilIdx = 0;
-        while (it.more()) {
-            BSONElement elt = it.next();
-            int direction = (elt.numberInt() >= 0) ? 1 : -1;
-            direction *= scanDir;
-            if (-1 == direction) {
-                vector<Interval>& iv = bounds->fields[oilIdx].intervals;
-                // Step 1: reverse the list.
-                std::reverse(iv.begin(), iv.end());
-                // Step 2: reverse each interval.
-                for (size_t i = 0; i < iv.size(); ++i) {
-                    QLOG() << "reversing " << iv[i].toString() << endl;
-                    iv[i].reverse();
-                }
-            }
-            ++oilIdx;
-        }
-
-        if (!bounds->isValidFor(kp, scanDir)) {
-            QLOG() << "INVALID BOUNDS: " << bounds->toString() << endl;
-            QLOG() << "kp = " << kp.toString() << endl;
-            QLOG() << "scanDir = " << scanDir << endl;
-            verify(0);
         }
     }
 
@@ -271,7 +261,7 @@ namespace mongo {
 
         // All fields are filled out with bounds, nothing to do.
         if (firstEmptyField == bounds->fields.size()) {
-            alignBounds(bounds, index.keyPattern);
+            IndexBoundsBuilder::alignBounds(bounds, index.keyPattern);
             return;
         }
 
@@ -303,7 +293,7 @@ namespace mongo {
 
         // We create bounds assuming a forward direction but can easily reverse bounds to align
         // according to our desired direction.
-        alignBounds(bounds, index.keyPattern);
+        IndexBoundsBuilder::alignBounds(bounds, index.keyPattern);
     }
 
     // static
@@ -489,11 +479,19 @@ namespace mongo {
                     delete child;
                     // Don't increment curChild.
                 }
-                else if (tightness == IndexBoundsBuilder::INEXACT_COVERED) {
+                else if (tightness == IndexBoundsBuilder::INEXACT_COVERED
+                         && !indices[currentIndexNumber].multikey) {
                     // The bounds are not exact, but the information needed to
                     // evaluate the predicate is in the index key. Remove the
                     // MatchExpression from its parent and attach it to the filter
                     // of the index scan we're building.
+                    //
+                    // We can only use this optimization if the index is NOT multikey.
+                    // Suppose that we had the multikey index {x: 1} and a document
+                    // {x: ["a", "b"]}. Now if we query for {x: /b/} the filter might
+                    // ever only be applied to the index key "a". We'd incorrectly
+                    // conclude that the document does not match the query :( so we
+                    // gotta stick to non-multikey indices.
                     root->getChildVector()->erase(root->getChildVector()->begin()
                                                   + curChild);
 
@@ -584,6 +582,17 @@ namespace mongo {
                 AndHashNode* ahn = new AndHashNode();
                 ahn->children.swap(ixscanNodes);
                 andResult = ahn;
+                // The AndHashNode provides the sort order of its last child.  If any of the
+                // possible subnodes of AndHashNode provides the sort order we care about, we put
+                // that one last.
+                for (size_t i = 0; i < ahn->children.size(); ++i) {
+                    ahn->children[i]->computeProperties();
+                    const BSONObjSet& sorts = ahn->children[i]->getSort();
+                    if (sorts.end() != sorts.find(query.getParsed().getSort())) {
+                        std::swap(ahn->children[i], ahn->children.back());
+                        break;
+                    }
+                }
             }
         }
 
@@ -597,8 +606,18 @@ namespace mongo {
         if (root->numChildren() > 0) {
             FetchNode* fetch = new FetchNode();
             verify(NULL != autoRoot.get());
-            // Takes ownership.
-            fetch->filter.reset(autoRoot.release());
+            if (autoRoot->numChildren() == 1) {
+                // An $and of one thing is that thing.
+                MatchExpression* child = autoRoot->getChild(0);
+                autoRoot->getChildVector()->clear();
+                // Takes ownership.
+                fetch->filter.reset(child);
+                // 'autoRoot' will delete the empty $and.
+            }
+            else { // root->numChildren() > 1
+                // Takes ownership.
+                fetch->filter.reset(autoRoot.release());
+            }
             // takes ownership
             fetch->children.push_back(andResult);
             andResult = fetch;
@@ -687,6 +706,10 @@ namespace mongo {
             }
         }
 
+        // Evaluate text nodes first to ensure that text scores are available.
+        // Move text nodes to front of vector.
+        std::stable_partition(orResult->children.begin(), orResult->children.end(), isTextNode);
+
         // OR must have an index for each child, so we should have detached all children from
         // 'root', and there's nothing useful to do with an empty or MatchExpression.  We let it die
         // via autoRoot.
@@ -733,9 +756,6 @@ namespace mongo {
                 QuerySolutionNode* soln = makeLeafNode(query, indices[tag->index], root,
                                                        &tightness);
                 verify(NULL != soln);
-                stringstream ss;
-                soln->appendToString(&ss, 0);
-                // QLOG() << "about to finish leaf node, soln " << ss.str() << endl;
                 finishLeafNode(soln, indices[tag->index]);
 
                 if (inArrayOperator) {
@@ -752,12 +772,13 @@ namespace mongo {
                 if (tightness == IndexBoundsBuilder::EXACT) {
                     return soln;
                 }
-                else if (tightness == IndexBoundsBuilder::INEXACT_COVERED) {
+                else if (tightness == IndexBoundsBuilder::INEXACT_COVERED
+                         && !indices[tag->index].multikey) {
                     verify(NULL == soln->filter.get());
                     soln->filter.reset(autoRoot.release());
                     return soln;
                 }
-                else { // tightness == IndexBoundsBuilder::INEXACT_FETCH
+                else {
                     FetchNode* fetch = new FetchNode();
                     verify(NULL != autoRoot.get());
                     fetch->filter.reset(autoRoot.release());
@@ -829,17 +850,10 @@ namespace mongo {
         IndexScanNode* isn = new IndexScanNode();
         isn->indexKeyPattern = index.keyPattern;
         isn->indexIsMultiKey = index.multikey;
-        isn->bounds.fields.resize(index.keyPattern.nFields());
         isn->maxScan = query.getParsed().getMaxScan();
+        isn->addKeyMetadata = query.getParsed().returnKey();
 
-        // TODO: can we use simple bounds with this compound idx?
-        BSONObjIterator it(isn->indexKeyPattern);
-        int field = 0;
-        while (it.more()) {
-            IndexBoundsBuilder::allValuesForField(it.next(), &isn->bounds.fields[field]);
-            ++field;
-        }
-        alignBounds(&isn->bounds, isn->indexKeyPattern);
+        IndexBoundsBuilder::allValuesBounds(index.keyPattern, &isn->bounds);
 
         if (-1 == direction) {
             QueryPlannerCommon::reverseScans(isn);
@@ -914,6 +928,7 @@ namespace mongo {
         isn->indexIsMultiKey = index.multikey;
         isn->direction = 1;
         isn->maxScan = query.getParsed().getMaxScan();
+        isn->addKeyMetadata = query.getParsed().returnKey();
         isn->bounds.isSimpleRange = true;
         isn->bounds.startKey = startKey;
         isn->bounds.endKey = endKey;

@@ -29,8 +29,11 @@
 */
 
 #include "mongo/db/client.h"
+#include "mongo/db/curop.h"
 #include "mongo/db/commands.h"
+#include "mongo/db/field_parser.h"
 #include "mongo/db/lasterror.h"
+#include "mongo/db/repl/rs.h"
 #include "mongo/db/write_concern.h"
 
 namespace mongo {
@@ -83,6 +86,7 @@ namespace mongo {
                                            const BSONObj& cmdObj,
                                            std::vector<Privilege>* out) {} // No auth required
         virtual void help( stringstream& help ) const {
+            lastError.disableForCommand(); // SERVER-11492
             help << "return error status of the last operation on this connection\n"
                  << "options:\n"
                  << "  { fsync:true } - fsync before returning, or wait for journal commit if running with --journal\n"
@@ -91,49 +95,160 @@ namespace mongo {
                  << "  { w:'majority' } - await replication to majority of set\n"
                  << "  { wtimeout:m} - timeout for w in m milliseconds";
         }
-        bool run(const string& dbname, BSONObj& _cmdObj, int, string& errmsg, BSONObjBuilder& result, bool fromRepl) {
+
+        bool run( const string& dbname,
+                  BSONObj& cmdObj,
+                  int,
+                  string& errmsg,
+                  BSONObjBuilder& result,
+                  bool fromRepl ) {
+
+            //
+            // Correct behavior here is very finicky.
+            //
+            // 1.  The first step is to append the error that occurred on the previous operation.
+            // This adds an "err" field to the command, which is *not* the command failing.
+            //
+            // 2.  Next we parse and validate write concern options.  If these options are invalid
+            // the command fails no matter what, even if we actually had an error earlier.  The
+            // reason for checking here is to match legacy behavior on these kind of failures -
+            // we'll still get an "err" field for the write error.
+            //
+            // 3.  If we had an error on the previous operation, we then return immediately.
+            //
+            // 4.  Finally, we actually enforce the write concern.  All errors *except* timeout are
+            // reported with ok : 0.0, to match legacy behavior.
+            //
+            // There is a special case when "wOpTime" and "wElectionId" are explicitly provided by 
+            // the client (mongos) - in this case we *only* enforce the write concern if it is 
+            // valid.
+            //
+            // We always need to either report "err" (if ok : 1) or "errmsg" (if ok : 0), even if
+            // err is null.
+            //
+
             LastError *le = lastError.disableForCommand();
 
-            if ( le->nPrev != 1 ) {
-                LastError::noError.appendSelf( result , false );
-                le->appendSelfStatus( result );
-            }
-            else {
-                le->appendSelf( result , false );
-            }
-
+            // Always append lastOp and connectionId
             Client& c = cc();
             c.appendLastOp( result );
 
-            result.appendNumber( "connectionId" , c.getConnectionId() ); // for sharding; also useful in general for debugging
+            // for sharding; also useful in general for debugging
+            result.appendNumber( "connectionId" , c.getConnectionId() );
 
-            BSONObj cmdObj = _cmdObj;
-            {
-                BSONObj::iterator i(_cmdObj);
-                i.next();
-                if( !i.more() ) {
-                    /* empty, use default */
-                    BSONObj *def = getLastErrorDefault;
-                    if( def )
-                        cmdObj = *def;
-                }
+            OpTime lastOpTime;
+            BSONField<OpTime> wOpTimeField("wOpTime");
+            FieldParser::FieldState extracted = FieldParser::extract(cmdObj, wOpTimeField, 
+                                                                     &lastOpTime, &errmsg);
+            if (!extracted) {
+                result.append("badGLE", cmdObj);
+                appendCommandStatus(result, false, errmsg);
+                return false;
             }
-
-            WriteConcernOptions writeConcern;
-            Status status = writeConcern.parse( cmdObj );
-            if ( !status.isOK() ) {
-                result.append( "badGLE", cmdObj );
-                errmsg = status.toString();
+            bool lastOpTimePresent = extracted != FieldParser::FIELD_NONE;
+            if (!lastOpTimePresent) {
+                // Use the client opTime if no wOpTime is specified
+                lastOpTime = cc().getLastOp();
+            }
+            
+            OID electionId;
+            BSONField<OID> wElectionIdField("wElectionId");
+            extracted = FieldParser::extract(cmdObj, wElectionIdField, 
+                                             &electionId, &errmsg);
+            if (!extracted) {
+                result.append("badGLE", cmdObj);
+                appendCommandStatus(result, false, errmsg);
                 return false;
             }
 
-            WriteConcernResult res;
-            status = waitForWriteConcern( cc(), writeConcern, &res );
-            res.appendTo( &result );
-            if ( status.code() == ErrorCodes::WriteConcernLegacyOK ) {
-                result.append( "wnote", status.toString() );
+            bool electionIdPresent = extracted != FieldParser::FIELD_NONE;
+            bool errorOccurred = false;
+
+            // Errors aren't reported when wOpTime is used
+            if ( !lastOpTimePresent ) {
+                if ( le->nPrev != 1 ) {
+                    errorOccurred = LastError::noError.appendSelf( result, false );
+                    le->appendSelfStatus( result );
+                }
+                else {
+                    errorOccurred = le->appendSelf( result, false );
+                }
+            }
+
+            BSONObj writeConcernDoc = cmdObj;
+            // Use the default options if we have no gle options aside from wOpTime/wElectionId
+            const int nFields = cmdObj.nFields();
+            bool useDefaultGLEOptions = (nFields == 1) || 
+                (nFields == 2 && lastOpTimePresent) ||
+                (nFields == 3 && lastOpTimePresent && electionIdPresent);
+
+            if ( useDefaultGLEOptions && getLastErrorDefault ) {
+                writeConcernDoc = *getLastErrorDefault;
+            }
+
+            //
+            // Validate write concern no matter what, this matches 2.4 behavior
+            //
+
+            WriteConcernOptions writeConcern;
+            Status status = writeConcern.parse( writeConcernDoc );
+
+            if ( status.isOK() ) {
+                // Ensure options are valid for this host
+                status = validateWriteConcern( writeConcern );
+            }
+
+            if ( !status.isOK() ) {
+                result.append( "badGLE", writeConcernDoc );
+                return appendCommandStatus( result, status );
+            }
+
+            // Don't wait for replication if there was an error reported - this matches 2.4 behavior
+            if ( errorOccurred ) {
+                dassert( !lastOpTimePresent );
                 return true;
             }
+
+            // No error occurred, so we won't duplicate these fields with write concern errors
+            dassert( result.asTempObj()["err"].eoo() );
+            dassert( result.asTempObj()["code"].eoo() );
+
+            // If we got an electionId, make sure it matches
+            if (electionIdPresent) {
+                if (!theReplSet) {
+                    // Ignore electionIds of 0 from mongos.
+                    if (electionId != OID()) {
+                        errmsg = "wElectionId passed but no replication active";
+                        result.append("code", ErrorCodes::BadValue);
+                        return false;
+                    }
+                } 
+                else {
+                    if (electionId != theReplSet->getElectionId()) {
+                        LOG(3) << "oid passed in is " << electionId
+                               << ", but our id is " << theReplSet->getElectionId();
+                        errmsg = "election occurred after write";
+                        result.append("code", ErrorCodes::WriteConcernFailed);
+                        return false;
+                    }
+                }
+            }
+
+            cc().curop()->setMessage( "waiting for write concern" );
+
+            WriteConcernResult wcResult;
+            status = waitForWriteConcern( writeConcern, lastOpTime, &wcResult );
+            wcResult.appendTo( &result );
+
+            // For backward compatibility with 2.4, wtimeout returns ok : 1.0
+            if ( wcResult.wTimedOut ) {
+                dassert( !wcResult.err.empty() ); // so we always report err
+                dassert( !status.isOK() );
+                result.append( "errmsg", "timed out waiting for slaves" );
+                result.append( "code", status.code() );
+                return true;
+            }
+
             return appendCommandStatus( result, status );
         }
 

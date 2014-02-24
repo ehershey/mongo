@@ -12,6 +12,18 @@
  *
  *    You should have received a copy of the GNU Affero General Public License
  *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the GNU Affero General Public License in all respects
+ *    for all of the code used other than as permitted herein. If you modify
+ *    file(s) with this exception, you may extend this exception to your
+ *    version of the file(s), but you are not obligated to do so. If you do not
+ *    wish to do so, delete this exception statement from your version. If you
+ *    delete this exception statement from all source files in the program,
+ *    then also delete it in the license file.
  */
 
 /**
@@ -23,6 +35,7 @@
 #include "mongo/client/connpool.h"
 #include "mongo/client/dbclientinterface.h"
 #include "mongo/client/dbclient_rs.h"
+#include "mongo/client/replica_set_monitor.h"
 #include "mongo/dbtests/mock/mock_conn_registry.h"
 #include "mongo/dbtests/mock/mock_replica_set.h"
 #include "mongo/unittest/unittest.h"
@@ -118,6 +131,9 @@ namespace {
         MockReplicaSet* replSet = getReplSet();
         DBClientReplicaSet replConn(replSet->getSetName(), replSet->getHosts());
 
+        // Need up-to-date view, since either host is valid if view is stale.
+        ReplicaSetMonitor::get(replSet->getSetName())->startOrContinueRefresh().refreshAll();
+
         Query query;
         query.readPref(mongo::ReadPreference_PrimaryPreferred, BSONArray());
 
@@ -130,6 +146,9 @@ namespace {
     TEST_F(BasicRS, SecondaryPreferred) {
         MockReplicaSet* replSet = getReplSet();
         DBClientReplicaSet replConn(replSet->getSetName(), replSet->getHosts());
+
+        // Need up-to-date view, since either host is valid if view is stale.
+        ReplicaSetMonitor::get(replSet->getSetName())->startOrContinueRefresh().refreshAll();
 
         Query query;
         query.readPref(mongo::ReadPreference_SecondaryPreferred, BSONArray());
@@ -405,7 +424,13 @@ namespace {
     class TaggedFiveMemberRS: public mongo::unittest::Test {
     protected:
         void setUp() {
+            // Tests for pinning behavior require this.
+            ReplicaSetMonitor::useDeterministicHostSelection = true;
+
+            // This shuts down the background RSMWatcher thread and prevents it from running. These
+            // tests depend on controlling when the RSMs are updated.
             ReplicaSetMonitor::cleanup();
+
             _replSet.reset(new MockReplicaSet("test", 5));
             _originalConnectionHook = ConnectionString::getConnectionHook();
             ConnectionString::setConnectionHook(
@@ -472,6 +497,8 @@ namespace {
         }
 
         void tearDown() {
+            ReplicaSetMonitor::useDeterministicHostSelection = false;
+
             ConnectionString::setConnectionHook(_originalConnectionHook);
             ReplicaSetMonitor::cleanup();
             _replSet.reset();
@@ -517,12 +544,48 @@ namespace {
         }
     }
 
+    TEST_F(TaggedFiveMemberRS, ConnShouldNotPinIfHostMarkedAsFailed) {
+        MockReplicaSet* replSet = getReplSet();
+        vector<HostAndPort> seedList;
+        seedList.push_back(HostAndPort(replSet->getPrimary()));
+
+        DBClientReplicaSet replConn(replSet->getSetName(), seedList);
+
+        string dest;
+        {
+            Query query;
+            query.readPref(mongo::ReadPreference_PrimaryPreferred, BSONArray());
+
+            // Note: IdentityNS contains the name of the server.
+            auto_ptr<DBClientCursor> cursor = replConn.query(IdentityNS, query);
+            BSONObj doc = cursor->next();
+            dest = doc[HostField.name()].str();
+        }
+
+        // This is the only difference from ConnShouldPinIfSameSettings which tests that we *do* pin
+        // in if the host is still marked as up. Note that this only notifies the RSM, and does not
+        // directly effect the DBClientRS.
+        ReplicaSetMonitor::get(replSet->getSetName())->failedHost(dest);
+
+        {
+            Query query;
+            query.readPref(mongo::ReadPreference_PrimaryPreferred, BSONArray());
+            auto_ptr<DBClientCursor> cursor = replConn.query(IdentityNS, query);
+            BSONObj doc = cursor->next();
+            const string newDest = doc[HostField.name()].str();
+            ASSERT_NOT_EQUALS(dest, newDest);
+        }
+    }
+
     TEST_F(TaggedFiveMemberRS, ConnShouldNotPinIfDiffMode) {
         MockReplicaSet* replSet = getReplSet();
         vector<HostAndPort> seedList;
         seedList.push_back(HostAndPort(replSet->getPrimary()));
 
         DBClientReplicaSet replConn(replSet->getSetName(), seedList);
+
+        // Need up-to-date view to ensure there are multiple valid choices.
+        ReplicaSetMonitor::get(replSet->getSetName())->startOrContinueRefresh().refreshAll();
 
         string dest;
         {
@@ -552,6 +615,9 @@ namespace {
         seedList.push_back(HostAndPort(replSet->getPrimary()));
 
         DBClientReplicaSet replConn(replSet->getSetName(), seedList);
+
+        // Need up-to-date view to ensure there are multiple valid choices.
+        ReplicaSetMonitor::get(replSet->getSetName())->startOrContinueRefresh().refreshAll();
 
         string dest;
         {
@@ -585,6 +651,10 @@ namespace {
         seedList.push_back(HostAndPort(replSet->getPrimary()));
 
         DBClientReplicaSet replConn(replSet->getSetName(), seedList);
+
+        // Need up-to-date view since slaveConn() uses SecondaryPreferred, and this test assumes it
+        // knows about at least one secondary.
+        ReplicaSetMonitor::get(replSet->getSetName())->startOrContinueRefresh().refreshAll();
 
         string dest;
         mongo::DBClientConnection& secConn = replConn.slaveConn();

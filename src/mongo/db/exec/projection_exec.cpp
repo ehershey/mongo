@@ -31,6 +31,7 @@
 #include "mongo/db/exec/working_set_computed_data.h"
 #include "mongo/db/matcher/expression_parser.h"
 #include "mongo/db/matcher/expression.h"
+#include "mongo/db/query/lite_parsed_query.h"
 #include "mongo/util/mongoutils/str.h"
 
 namespace mongo {
@@ -44,7 +45,9 @@ namespace mongo {
           _arrayOpType(ARRAY_OP_NORMAL),
           _hasNonSimple(false),
           _hasDottedField(false),
-          _queryExpression(NULL) { }
+          _queryExpression(NULL),
+          _hasReturnKey(false) { }
+
 
     ProjectionExec::ProjectionExec(const BSONObj& spec, const MatchExpression* queryExpression)
         : _include(true),
@@ -56,7 +59,8 @@ namespace mongo {
           _arrayOpType(ARRAY_OP_NORMAL),
           _hasNonSimple(false),
           _hasDottedField(false),
-          _queryExpression(queryExpression) {
+          _queryExpression(queryExpression),
+          _hasReturnKey(false) {
 
         // Are we including or excluding fields?
         // -1 when we haven't initialized it.
@@ -118,11 +122,22 @@ namespace mongo {
                 }
                 else if (mongoutils::str::equals(e2.fieldName(), "$meta")) {
                     verify(String == e2.type());
-                    if (mongoutils::str::equals(e2.valuestr(), "text")) {
-                        _meta[e.fieldName()] = META_TEXT;
+                    if (e2.valuestr() == LiteParsedQuery::metaTextScore) {
+                        _meta[e.fieldName()] = META_TEXT_SCORE;
                     }
-                    else if (mongoutils::str::equals(e2.valuestr(), "diskloc")) {
+                    else if (e2.valuestr() == LiteParsedQuery::metaDiskLoc) {
                         _meta[e.fieldName()] = META_DISKLOC;
+                    }
+                    else if (e2.valuestr() == LiteParsedQuery::metaGeoNearPoint) {
+                        _meta[e.fieldName()] = META_GEONEAR_POINT;
+                    }
+                    else if (e2.valuestr() == LiteParsedQuery::metaGeoNearDistance) {
+                        _meta[e.fieldName()] = META_GEONEAR_DIST;
+                    }
+                    else if (e2.valuestr() == LiteParsedQuery::metaIndexKey) {
+                        _hasReturnKey = true;
+                        // The index key clobbers everything so just stop parsing here.
+                        return;
                     }
                     else {
                         // This shouldn't happen, should be caught by parsing.
@@ -174,7 +189,6 @@ namespace mongo {
             _include = include;
         }
         else {
-            // XXX document
             _include = !include;
 
             const size_t dot = field.find('.');
@@ -218,8 +232,23 @@ namespace mongo {
     //
 
     Status ProjectionExec::transform(WorkingSetMember* member) const {
-        BSONObjBuilder bob;
+        if (_hasReturnKey) {
+            BSONObj keyObj;
 
+            if (member->hasComputed(WSM_INDEX_KEY)) {
+                const IndexKeyComputedData* key
+                    = static_cast<const IndexKeyComputedData*>(member->getComputed(WSM_INDEX_KEY));
+                keyObj = key->getKey();
+            }
+
+            member->state = WorkingSetMember::OWNED_OBJ;
+            member->obj = keyObj;
+            member->keyData.clear();
+            member->loc = DiskLoc();
+            return Status::OK();
+        }
+
+        BSONObjBuilder bob;
         if (!requiresDocument()) {
             // Go field by field.
             if (_includeID) {
@@ -264,7 +293,37 @@ namespace mongo {
         }
 
         for (MetaMap::const_iterator it = _meta.begin(); it != _meta.end(); ++it) {
-            if (META_TEXT == it->second) {
+            if (META_GEONEAR_DIST == it->second) {
+                if (member->hasComputed(WSM_COMPUTED_GEO_DISTANCE)) {
+                    const GeoDistanceComputedData* dist
+                        = static_cast<const GeoDistanceComputedData*>(
+                                member->getComputed(WSM_COMPUTED_GEO_DISTANCE));
+                    bob.append(it->first, dist->getDist());
+                }
+                else {
+                    return Status(ErrorCodes::InternalError,
+                                  "near loc dist requested but no data available");
+                }
+            }
+            else if (META_GEONEAR_POINT == it->second) {
+                if (member->hasComputed(WSM_GEO_NEAR_POINT)) {
+                    const GeoNearPointComputedData* point
+                        = static_cast<const GeoNearPointComputedData*>(
+                                member->getComputed(WSM_GEO_NEAR_POINT));
+                    BSONObj ptObj = point->getPoint();
+                    if (ptObj.couldBeArray()) {
+                        bob.appendArray(it->first, ptObj);
+                    }
+                    else {
+                        bob.append(it->first, ptObj);
+                    }
+                }
+                else {
+                    return Status(ErrorCodes::InternalError,
+                                  "near loc proj requested but no data available");
+                }
+            }
+            else if (META_TEXT_SCORE == it->second) {
                 if (member->hasComputed(WSM_COMPUTED_TEXT_SCORE)) {
                     const TextScoreComputedData* score
                         = static_cast<const TextScoreComputedData*>(
@@ -320,7 +379,10 @@ namespace mongo {
             // Case 2: no array projection for this field.
             Matchers::const_iterator matcher = _matchers.find(elt.fieldName());
             if (_matchers.end() == matcher) {
-                append(bob, elt, details, arrayOpType);
+                Status s = append(bob, elt, details, arrayOpType);
+                if (!s.isOK()) {
+                    return s;
+                }
                 continue;
             }
 
@@ -417,6 +479,14 @@ namespace mongo {
                                   const MatchDetails* details,
                                   const ArrayOpType arrayOpType) const {
 
+
+        // Skip if the field name matches a computed $meta field.
+        // $meta projection fields can exist at the top level of
+        // the result document and the field names cannot be dotted.
+        if (_meta.find(elt.fieldName()) != _meta.end()) {
+            return Status::OK();
+        }
+
         FieldMap::const_iterator field = _fields.find(elt.fieldName());
         if (field == _fields.end()) {
             if (_include) {
@@ -447,11 +517,11 @@ namespace mongo {
             if (details && arrayOpType == ARRAY_OP_POSITIONAL) {
                 // $ positional operator specified
                 if (!details->hasElemMatchKey()) {
-                    stringstream error;
+                    mongoutils::str::stream error;
                     error << "positional operator (" << elt.fieldName()
                           << ".$) requires corresponding field"
                           << " in query specifier";
-                    return Status(ErrorCodes::BadValue, error.str());
+                    return Status(ErrorCodes::BadValue, error);
                 }
 
                 if (elt.embeddedObject()[details->elemMatchKey()].eoo()) {

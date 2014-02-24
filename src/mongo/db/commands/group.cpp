@@ -39,8 +39,10 @@
 #include "mongo/db/client_basic.h"
 #include "mongo/db/clientcursor.h"
 #include "mongo/db/commands.h"
+#include "mongo/db/catalog/database.h"
 #include "mongo/db/instance.h"
 #include "mongo/db/query/get_runner.h"
+#include "mongo/db/catalog/collection.h"
 #include "mongo/scripting/engine.h"
 
 namespace mongo {
@@ -148,10 +150,8 @@ namespace mongo {
                 }
 
                 auto_ptr<Runner> runner(rawRunner);
-                auto_ptr<DeregisterEvenIfUnderlyingCodeThrows> safety;
-                ClientCursor::registerRunner(runner.get());
+                const ScopedRunnerRegistration safety(runner.get());
                 runner->setYieldPolicy(Runner::YIELD_AUTO);
-                safety.reset(new DeregisterEvenIfUnderlyingCodeThrows(runner.get()));
 
                 BSONObj obj;
                 Runner::RunnerState state;

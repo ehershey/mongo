@@ -38,15 +38,15 @@ namespace mongo {
     namespace str = mongoutils::str;
 
     namespace {
-        // TODO: Egregiously stolen from jsobjmanipulator.h and instance.cpp to break a link
-        // dependency cycle. We should sort this out, but we don't need to do it right now.
+        const char idFieldName[] = "_id";
+
         void fixupTimestamps( const BSONObj& obj ) {
             BSONObjIterator i(obj);
-            for(int j = 0; i.moreWithEOO() && j < 2; ++j) {
+            while (i.more()) {
                 BSONElement e = i.next();
-                if (e.eoo())
-                    break;
-                if (e.type() == Timestamp) {
+
+                // Skip _id field -- we do not replace it
+                if (e.type() == Timestamp && e.fieldNameStringData() != idFieldName) {
                     // performance note, this locks a mutex:
                     unsigned long long &timestamp =
                         *(reinterpret_cast<unsigned long long*>(
@@ -55,7 +55,6 @@ namespace mongo {
                         mutex::scoped_lock lk(OpTime::m);
                         timestamp = OpTime::now(lk).asDate();
                     }
-                    break;
                 }
             }
         }
@@ -82,7 +81,8 @@ namespace mongo {
     ModifierObjectReplace::~ModifierObjectReplace() {
     }
 
-    Status ModifierObjectReplace::init(const BSONElement& modExpr, const Options& opts) {
+    Status ModifierObjectReplace::init(const BSONElement& modExpr, const Options& opts,
+                                       bool* positional) {
 
         if (modExpr.type() != Object) {
             // Impossible, really since the caller check this already...
@@ -91,6 +91,10 @@ namespace mongo {
                                            " but the type supplied was "
                                         << modExpr.type());
         }
+
+        // Object replacements never have positional operator.
+        if (positional)
+            *positional = false;
 
         // We make a copy of the object here because the update driver does not guarantees, in
         // the case of object replacement, that the modExpr is going to outlive this mod.
@@ -127,7 +131,7 @@ namespace mongo {
             current = current.rightSibling();
 
             // Skip _id field element -- it should not change
-            if (toRemove.getFieldName() == "_id") {
+            if (toRemove.getFieldName() == idFieldName) {
                 srcIdElement = toRemove;
                 continue;
             }
@@ -143,7 +147,7 @@ namespace mongo {
         BSONObjIterator it(_val);
         while (it.more()) {
             BSONElement elem = it.next();
-            if (elem.fieldNameStringData() == "_id") {
+            if (elem.fieldNameStringData() == idFieldName) {
                 dstIdElement = elem;
 
                 // Do not duplicate _id field

@@ -132,7 +132,7 @@ class Distro(object):
         layout (as distinct from where that distro's packaging building
         tools place the package files)."""
         if re.search("^(debian|ubuntu)", self.n):
-            return "repo/%s/dists/dist/mongodb/binary-%s/" % (self.n, self.archname(arch))
+            return "repo/%s/dists/dist/10gen/binary-%s/" % (self.n, self.archname(arch))
         elif re.search("(redhat|fedora|centos)", self.n):
             return "repo/%s/os/%s/%s/RPMS/" % (self.n, build_os, self.archname(arch))
         else:
@@ -156,6 +156,12 @@ class Distro(object):
             return [ "rhel57", "rhel62" ]
         else:
             raise Exception("BUG: unsupported platform?")
+
+    def release_dist(self, build_os):
+        """Return the release distribution to use in the rpm - "el5" for rhel 5.x,
+        "el6" for rhel 6.x, return anything else unchanged"""
+
+        return re.sub(r'^rh(el\d)', '\1', build_os)
 def main(argv):
     (flags, specs) = parse_args(argv[1:])
     distros=[Distro(distro) for distro in DISTROS]
@@ -175,7 +181,7 @@ def main(argv):
     os.chdir(prefix)
     try:
         # Download the binaries.
-        urlfmt="http://downloads.mongodb.com/linux/mongodb-linux-%s-subscription-%s-%s.tgz"
+        urlfmt="http://downloads.mongodb.com/linux/mongodb-linux-%s-enterprise-%s-%s.tgz"
     
         # Build a pacakge for each distro/spec/arch tuple, and
         # accumulate the repository-layout directories.
@@ -418,7 +424,7 @@ Label: mongodb
 Suite: mongodb
 Codename: %s
 Version: %s
-Architectures: i386 amd64
+Architectures: amd64
 Components: mongodb
 Description: mongodb packages
 """ % ("dist", "dist")
@@ -572,7 +578,8 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
     macrofiles=[l for l in backtick(["rpm", "--showrc"]).split("\n") if l.startswith("macrofiles")]
     flags=[]
     macropath=os.getcwd()+"/macros"
-    write_rpm_macros_file(macropath, topdir)
+
+    write_rpm_macros_file(macropath, topdir, distro.release_dist(build_os))
     if len(macrofiles)>0:
         macrofiles=macrofiles[0]+":"+macropath
         rcfile=os.getcwd()+"/rpmrc"
@@ -618,10 +625,11 @@ def write_rpmrc_file(path, string):
     finally:
         f.close()
 
-def write_rpm_macros_file(path, topdir):
+def write_rpm_macros_file(path, topdir, release_dist):
     f=open(path, 'w')
     try:
-        f.write("%%_topdir	%s" % topdir)
+        f.write("%%_topdir	%s\n" % topdir)
+        f.write("%%dist	.%s\n" % release_dist)
     finally:
         f.close()
 

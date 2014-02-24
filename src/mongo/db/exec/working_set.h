@@ -97,11 +97,9 @@ namespace mongo {
         bool isFlagged(WorkingSetID id) const;
 
         /**
-         * Return a set of all WSIDs passed to flagForReview.
-         *
-         * ONLY FOR TESTS!
+         * Return the set of all WSIDs passed to flagForReview.
          */
-        unordered_set<WorkingSetID> getFlagged() const;
+        const unordered_set<WorkingSetID>& getFlagged() const;
 
     private:
         struct MemberHolder {
@@ -110,7 +108,7 @@ namespace mongo {
 
             // Free list link if freed. Points to self if in use.
             WorkingSetID nextFreeOrSelf;
-            bool flagged;
+
             // Owning pointer
             WorkingSetMember* member;
         };
@@ -123,6 +121,9 @@ namespace mongo {
         // link. INVALID_ID is the list terminator since 0 is a valid index.
         // If _freeList == INVALID_ID, the free list is empty and all elements in _data are in use.
         WorkingSetID _freeList;
+
+        // An insert-only set of WorkingSetIDs that have been flagged for review.
+        unordered_set<WorkingSetID> _flagged;
     };
 
     /**
@@ -145,8 +146,20 @@ namespace mongo {
      * What types of computed data can we have?
      */
     enum WorkingSetComputedDataType {
+        // What's the score of the document retrieved from a $text query?
         WSM_COMPUTED_TEXT_SCORE = 0,
+
+        // What's the distance from a geoNear query point to the document?
         WSM_COMPUTED_GEO_DISTANCE = 1,
+
+        // The index key used to retrieve the document, for $returnKey query option.
+        WSM_INDEX_KEY = 2,
+
+        // What point (of several possible points) was used to compute the distance to the document
+        // via geoNear?
+        WSM_GEO_NEAR_POINT = 3,
+
+        // Must be last.
         WSM_COMPUTED_NUM_TYPES,
     };
 

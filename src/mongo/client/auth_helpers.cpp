@@ -16,10 +16,14 @@
 #include "mongo/client/auth_helpers.h"
 
 #include "mongo/base/string_data.h"
+#include "mongo/bson/util/bson_extract.h"
+#include "mongo/db/auth/authorization_manager.h"
 #include "mongo/util/md5.hpp"
 
 namespace mongo {
 namespace auth {
+
+    const std::string schemaVersionServerParameter = "authSchemaVersion";
 
     std::string createPasswordDigest(const StringData& username,
                                      const StringData& clearTextPassword) {
@@ -37,5 +41,35 @@ namespace auth {
         return digestToString( d );
     }
 
+    Status getRemoteStoredAuthorizationVersion(DBClientBase* conn, int* outVersion) {
+        try {
+            BSONObj cmdResult;
+            conn->runCommand(
+                    "admin",
+                    BSON("getParameter" << 1 << schemaVersionServerParameter << 1),
+                    cmdResult);
+            if (!cmdResult["ok"].trueValue()) {
+                std::string errmsg = cmdResult["errmsg"].str();
+                if (errmsg == "no option found to get" ||
+                    StringData(errmsg).startsWith("no such cmd")) {
+
+                    *outVersion = 1;
+                    return Status::OK();
+                }
+                int code = cmdResult["code"].numberInt();
+                if (code == 0) {
+                    code = ErrorCodes::UnknownError;
+                }
+                return Status(ErrorCodes::Error(code), errmsg);
+            }
+            BSONElement versionElement = cmdResult[schemaVersionServerParameter];
+            if (versionElement.eoo())
+                return Status(ErrorCodes::UnknownError, "getParameter misbehaved.");
+            *outVersion = versionElement.numberInt();
+            return Status::OK();
+        } catch (const DBException& e) {
+            return e.toStatus();
+        }
+    }
 }  // namespace auth
 }  // namespace mongo

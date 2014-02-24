@@ -40,6 +40,7 @@
 #include <vector>
 
 #include "mongo/base/status.h"
+#include "mongo/bson/mutable/document.h"
 #include "mongo/db/auth/action_set.h"
 #include "mongo/db/auth/action_type.h"
 #include "mongo/db/auth/authorization_manager_global.h"
@@ -159,19 +160,6 @@ namespace mongo {
                 getGlobalAuthorizationManager())));
         return *c;
     }
-
-    /* resets the client for the current thread */
-    void Client::resetThread( const StringData& origThreadName ) {
-        verify( currentClient.get() != 0 );
-
-        // Detach all client info from thread
-        mongo::lastError.reset(NULL);
-        currentClient.get()->shutdown();
-        currentClient.reset(NULL);
-
-        setThreadName( origThreadName.rawData() );
-    }
-
 
     Client::Client(const string& desc, AbstractMessagingPort *p) :
         ClientBasic(p),
@@ -462,7 +450,7 @@ namespace mongo {
                                            const BSONObj& cmdObj,
                                            std::vector<Privilege>* out) {
             ActionSet actions;
-            actions.addAction(ActionType::handshake);
+            actions.addAction(ActionType::internal);
             out->push_back(Privilege(ResourcePattern::forClusterResource(), actions));
         }
         virtual bool run(const string& , BSONObj& cmdObj, int, string& errmsg, BSONObjBuilder& result, bool fromRepl) {
@@ -567,7 +555,7 @@ namespace mongo {
         idhack = false;
         scanAndOrder = false;
         nupdated = -1;
-        nupdateNoops = -1;
+        nModified = -1;
         ninserted = -1;
         ndeleted = -1;
         nmoved = -1;
@@ -575,6 +563,7 @@ namespace mongo {
         fastmodinsert = false;
         upsert = false;
         keyUpdates = 0;  // unsigned, so -1 not possible
+        planSummary = "";
         
         exceptionInfo.reset();
         
@@ -595,11 +584,28 @@ namespace mongo {
         s << ns.toString();
 
         if ( ! query.isEmpty() ) {
-            if ( iscommand )
+            if ( iscommand ) {
                 s << " command: ";
-            else
+                
+                Command* curCommand = curop.getCommand();
+                if (curCommand) {
+                    mutablebson::Document cmdToLog(curop.query(), 
+                            mutablebson::Document::kInPlaceDisabled);
+                    curCommand->redactForLogging(&cmdToLog);
+                    s << cmdToLog.toString();
+                } 
+                else { // Should not happen but we need to handle curCommand == NULL gracefully
+                    s << query.toString();
+                }
+            }
+            else {
                 s << " query: ";
-            s << query.toString();
+                s << query.toString();
+            }
+        }
+
+        if (!planSummary.empty()) {
+            s << " planSummary: " << planSummary.toString();
         }
         
         if ( ! updateobj.isEmpty() ) {
@@ -617,6 +623,7 @@ namespace mongo {
         OPDEBUG_TOSTRING_HELP_BOOL( scanAndOrder );
         OPDEBUG_TOSTRING_HELP( nmoved );
         OPDEBUG_TOSTRING_HELP( nupdated );
+        OPDEBUG_TOSTRING_HELP( nModified );
         OPDEBUG_TOSTRING_HELP( ninserted );
         OPDEBUG_TOSTRING_HELP( ndeleted );
         OPDEBUG_TOSTRING_HELP_BOOL( fastmod );
@@ -633,8 +640,7 @@ namespace mongo {
                 s << " code:" << exceptionInfo.code;
         }
 
-        if ( curop.numYields() )
-            s << " numYields:" << curop.numYields();
+        s << " numYields:" << curop.numYields();
         
         s << " ";
         curop.lockStat().report( s );
@@ -710,6 +716,7 @@ namespace mongo {
         OPDEBUG_APPEND_BOOL( moved );
         OPDEBUG_APPEND_NUMBER( nmoved );
         OPDEBUG_APPEND_NUMBER( nupdated );
+        OPDEBUG_APPEND_NUMBER( nModified );
         OPDEBUG_APPEND_NUMBER( ninserted );
         OPDEBUG_APPEND_NUMBER( ndeleted );
         OPDEBUG_APPEND_BOOL( fastmod );
@@ -727,7 +734,13 @@ namespace mongo {
         OPDEBUG_APPEND_NUMBER( responseLength );
         b.append( "millis" , executionTime );
 
+        execStats.append(b, "execStats");
+
         return true;
     }
 
+    void saveGLEStats(const BSONObj& result, const std::string& conn) {
+        // This can be called in mongod, which is unfortunate.  To fix this,
+        // we can redesign how connection pooling works on mongod for sharded operations.
+    }
 }

@@ -58,7 +58,9 @@ namespace optionenvironment {
                    << option._dottedName;
                 throw DBException(sb.str(), ErrorCodes::InternalError);
             }
-            if (option._singleName == oditerator->_singleName) {
+            // Allow options with empty singleName since some options are not allowed on the command
+            // line
+            if (!option._singleName.empty() && option._singleName == oditerator->_singleName) {
                 StringBuilder sb;
                 sb << "Attempted to register option with duplicate singleName: "
                    << option._singleName;
@@ -354,7 +356,8 @@ namespace optionenvironment {
     Status OptionSection::getBoostOptions(po::options_description* boostOptions,
                                           bool visibleOnly,
                                           bool includeDefaults,
-                                          OptionSources sources) const {
+                                          OptionSources sources,
+                                          bool getEmptySections) const {
 
         std::list<OptionDescription>::const_iterator oditerator;
         for (oditerator = _options.begin(); oditerator != _options.end(); oditerator++) {
@@ -373,6 +376,16 @@ namespace optionenvironment {
                        << oditerator->_dottedName << "\": " << ret.toString();
                     return Status(ErrorCodes::InternalError, sb.str());
                 }
+
+                if (oditerator->_singleName.empty()) {
+                    StringBuilder sb;
+                    sb << "Single name is empty for option \""
+                       << oditerator->_dottedName << "\", but trying to use it on the command line "
+                       << "or INI config file.  Only options that are exclusive to the YAML config "
+                       << "file can have an empty single name";
+                    return Status(ErrorCodes::InternalError, oditerator->_dottedName);
+                }
+
                 boostOptions->add_options()(oditerator->_singleName.c_str(),
                         boostType.release(),
                         oditerator->_description.c_str());
@@ -384,7 +397,22 @@ namespace optionenvironment {
             po::options_description subGroup = ositerator->_name.empty()
                                                ? po::options_description()
                                                : po::options_description(ositerator->_name.c_str());
-            ositerator->getBoostOptions(&subGroup, visibleOnly, includeDefaults);
+
+            // Do not add empty sections to our option_description unless we specifically requested.
+            int numOptions;
+            Status ret = ositerator->countOptions(&numOptions, visibleOnly, sources);
+            if (!ret.isOK()) {
+                return ret;
+            }
+            if (numOptions == 0 && getEmptySections == false) {
+                continue;
+            }
+
+            ret = ositerator->getBoostOptions(&subGroup, visibleOnly, includeDefaults,
+                                                     sources, getEmptySections);
+            if (!ret.isOK()) {
+                return ret;
+            }
             boostOptions->add(subGroup);
         }
 
@@ -501,6 +529,18 @@ namespace optionenvironment {
 
         std::list<OptionDescription>::const_iterator oditerator;
         for (oditerator = _options.begin(); oditerator != _options.end(); oditerator++) {
+
+            // We need to check here that we didn't register an option with an empty single name
+            // that is allowed on the command line or in an old style config, since we don't have
+            // this information available all at once when the option is registered
+            if (oditerator->_singleName.empty() &&
+                oditerator->_sources & SourceAllLegacy) {
+                StringBuilder sb;
+                sb << "Found option allowed on the command line with an empty singleName: "
+                   << oditerator->_dottedName;
+                return Status(ErrorCodes::InternalError, sb.str());
+            }
+
             options->push_back(*oditerator);
         }
 
@@ -524,6 +564,32 @@ namespace optionenvironment {
         std::list<OptionSection>::const_iterator ositerator;
         for (ositerator = _subSections.begin(); ositerator != _subSections.end(); ositerator++) {
             ositerator->getDefaults(values);
+        }
+
+        return Status::OK();
+    }
+
+    Status OptionSection::countOptions(int* numOptions,
+                                       bool visibleOnly,
+                                       OptionSources sources) const {
+
+        *numOptions = 0;
+
+        std::list<OptionDescription>::const_iterator oditerator;
+        for (oditerator = _options.begin(); oditerator != _options.end(); oditerator++) {
+            // Only count this option if it matches the sources we specified and the option is
+            // either visible or we are requesting hidden options
+            if ((!visibleOnly || (oditerator->_isVisible)) &&
+                (oditerator->_sources & sources)) {
+                (*numOptions)++;
+            }
+        }
+
+        std::list<OptionSection>::const_iterator ositerator;
+        for (ositerator = _subSections.begin(); ositerator != _subSections.end(); ositerator++) {
+            int numSubOptions = 0;
+            ositerator->countOptions(&numSubOptions, visibleOnly, sources);
+            *numOptions += numSubOptions;
         }
 
         return Status::OK();
@@ -591,7 +657,11 @@ namespace optionenvironment {
         po::options_description boostOptions = _name.empty()
                                              ? po::options_description()
                                              : po::options_description(_name.c_str());
-        Status ret = getBoostOptions(&boostOptions, true, true);
+        Status ret = getBoostOptions(&boostOptions,
+                                     true, /* visibleOnly */
+                                     true, /* includeDefaults */
+                                     SourceAllLegacy,
+                                     false); /* getEmptySections */
         if (!ret.isOK()) {
             StringBuilder sb;
             sb << "Error constructing help string: " << ret.toString();

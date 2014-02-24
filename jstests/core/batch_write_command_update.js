@@ -15,7 +15,7 @@ function resultOK( result ) {
            !( 'code' in result ) &&
            !( 'errmsg' in result ) &&
            !( 'errInfo' in result ) &&
-           !( 'errDetails' in result );
+           !( 'writeErrors' in result );
 };
 
 function resultNOK( result ) {
@@ -42,35 +42,50 @@ printjson( result = coll.runCommand(request) );
 assert(resultOK(result));
 assert.eq(1, result.n);
 assert( 'upserted' in result );
+assert.eq(1, result.upserted.length);
+assert.eq(0, result.upserted[0].index);
+
 // Count the upserted doc
-assert.eq(1, coll.count({_id: result.upserted}));
+var upsertedId = result.upserted[0]._id;
+assert.eq(1, coll.count({_id: upsertedId}));
+assert.eq(0, result.nModified, "missing/wrong nModified")
 
 //
 // Single document upsert, write concern specified, no ordered specified
 coll.remove({});
 printjson( request = {update : coll.getName(),
                       updates: [{q:{a:1}, u: {$set: {a:1}}, upsert:true}],
-                      writeConcern: {}} );
+                      writeConcern: {w:1}} );
 printjson( result = coll.runCommand(request) );
 assert(resultOK(result));
 assert.eq(1, result.n);
 assert( 'upserted' in result );
+assert.eq(1, result.upserted.length);
+assert.eq(0, result.upserted[0].index);
+
 // Count the upserted doc
-assert.eq(1, coll.count({_id: result.upserted}));
+upsertedId = result.upserted[0]._id;
+assert.eq(1, coll.count({_id: upsertedId}));
+assert.eq(0, result.nModified, "missing/wrong nModified")
 
 //
 // Single document upsert, write concern specified, ordered = true
 coll.remove({});
 printjson( request = {update : coll.getName(),
                       updates: [{q:{a:1}, u: {$set: {a:1}}, upsert:true}],
-                      writeConcern: {},
+                      writeConcern: {w:1},
                       ordered:true} );
 printjson( result = coll.runCommand(request) );
 assert(resultOK(result));
 assert.eq(1, result.n);
 assert( 'upserted' in result );
+assert.eq(1, result.upserted.length);
+assert.eq(0, result.upserted[0].index);
+
 // Count the upserted doc
-assert.eq(1, coll.count({_id: result.upserted}));
+upsertedId = result.upserted[0]._id;
+assert.eq(1, coll.count({_id: upsertedId}));
+assert.eq(0, result.nModified, "missing/wrong nModified")
 
 //
 // Single document upsert, write concern 0 specified, ordered = true
@@ -81,10 +96,11 @@ printjson( request = {update : coll.getName(),
                       ordered:true} );
 printjson( result = coll.runCommand(request) );
 assert(resultOK(result));
-assert.eq(1, result.n);
-assert( 'upserted' in result );
-// Count the upserted doc
-assert.eq(1, coll.count({_id: result.upserted}));
+assert.eq(1, coll.count({ }));
+
+for (var field in result) {
+    assert.eq('ok', field, 'unexpected field found in result: ' + field);
+}
 
 //
 // Two document upsert, write concern 0 specified, ordered = true
@@ -96,9 +112,11 @@ printjson( request = {update : coll.getName(),
                       ordered:true} );
 printjson( result = coll.runCommand(request) );
 assert(resultOK(result));
-assert.eq(2, result.n);
-assert(!('upserted' in result));
 assert.eq(2, coll.count());
+
+for (var field in result) {
+    assert.eq('ok', field, 'unexpected field found in result: ' + field);
+}
 
 //
 // Single document update
@@ -112,6 +130,7 @@ assert(resultOK(result));
 assert.eq(1, result.n);
 assert(!('upserted' in result));
 assert.eq(1, coll.count());
+assert.eq(1, result.nModified, "missing/wrong nModified")
 
 //
 // Multi document update/upsert
@@ -125,6 +144,7 @@ printjson( request = {update : coll.getName(),
 printjson( result = coll.runCommand(request) );
 assert(resultOK(result));
 assert.eq(2, result.n);
+assert.eq(1, result.nModified, "missing/wrong nModified")
 
 assert.eq(1, result.upserted.length);
 assert.eq(1, result.upserted[0].index);
@@ -143,8 +163,26 @@ printjson( request = {update : coll.getName(),
 printjson( result = coll.runCommand(request) );
 assert(resultOK(result));
 assert.eq(2, result.n);
+assert.eq(2, result.nModified, "missing/wrong nModified")
 assert.eq(2, coll.find({a:1, c:2}).count());
 assert.eq(2, coll.count());
+
+//
+//Multiple document update, some no-ops
+coll.remove({});
+coll.insert({a:1, c:2});
+coll.insert({a:1});
+printjson( request = {update : coll.getName(),
+                   updates: [{q:{a:1}, u: {$set: {c:2}}, multi:true}],
+                   writeConcern: {w:1},
+                   ordered:false} );
+printjson( result = coll.runCommand(request) );
+assert(resultOK(result));
+assert.eq(2, result.n);
+assert.eq(1, result.nModified, "missing/wrong nModified")
+assert.eq(2, coll.find({a:1, c:2}).count());
+assert.eq(2, coll.count());
+
 
 //
 //
@@ -162,10 +200,12 @@ printjson( request = {update : coll.getName(),
                       ordered:true} );
 printjson( result = coll.runCommand(request) );
 printjson( coll.find().toArray() );
-assert(resultNOK(result));
-assert.eq(1, result.n);
-assert(!('upserted' in result));
+assert(result.ok);
 assert.eq(1, coll.count());
+
+for (var field in result) {
+    assert.eq('ok', field, 'unexpected field found in result: ' + field);
+}
 
 //
 // Upsert fail due to duplicate key index, w:1, ordered:true
@@ -177,13 +217,14 @@ printjson( request = {update : coll.getName(),
                       writeConcern: {w:1},
                       ordered:true} );
 printjson( result = coll.runCommand(request) );
-assert(resultNOK(result));
+assert(result.ok);
 assert.eq(2, result.n);
-assert.eq(1, result.errDetails.length);
+assert.eq(0, result.nModified, "missing/wrong nModified")
+assert.eq(1, result.writeErrors.length);
 
-assert.eq(2, result.errDetails[0].index);
-assert.eq('number', typeof result.errDetails[0].code);
-assert.eq('string', typeof result.errDetails[0].errmsg);
+assert.eq(2, result.writeErrors[0].index);
+assert.eq('number', typeof result.writeErrors[0].code);
+assert.eq('string', typeof result.writeErrors[0].errmsg);
 
 assert.eq(2, result.upserted.length);
 assert.eq(0, result.upserted[0].index);
@@ -203,17 +244,18 @@ printjson( request = {update : coll.getName(),
                       writeConcern: {w:1},
                       ordered:false} );
 printjson( result = coll.runCommand(request) );
-assert(resultNOK(result));
+assert(result.ok);
 assert.eq(2, result.n);
-assert.eq(2, result.errDetails.length);
+assert.eq(0, result.nModified, "missing/wrong nModified");
+assert.eq(2, result.writeErrors.length);
 
-assert.eq(1, result.errDetails[0].index);
-assert.eq('number', typeof result.errDetails[0].code);
-assert.eq('string', typeof result.errDetails[0].errmsg);
+assert.eq(1, result.writeErrors[0].index);
+assert.eq('number', typeof result.writeErrors[0].code);
+assert.eq('string', typeof result.writeErrors[0].errmsg);
 
-assert.eq(2, result.errDetails[1].index);
-assert.eq('number', typeof result.errDetails[1].code);
-assert.eq('string', typeof result.errDetails[1].errmsg);
+assert.eq(2, result.writeErrors[1].index);
+assert.eq('number', typeof result.writeErrors[1].code);
+assert.eq('string', typeof result.writeErrors[1].errmsg);
 
 assert.eq(2, result.upserted.length);
 assert.eq(0, result.upserted[0].index);

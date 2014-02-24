@@ -35,7 +35,7 @@
 
 #include "mongo/bson/util/atomic_int.h"
 #include "mongo/db/client.h"
-#include "mongo/db/catalog/ondisk/namespace.h"
+#include "mongo/db/structure/catalog/namespace.h"
 #include "mongo/util/concurrency/spin_lock.h"
 #include "mongo/util/net/hostandport.h"
 #include "mongo/util/progress_meter.h"
@@ -44,72 +44,6 @@
 namespace mongo {
 
     class CurOp;
-
-    /* lifespan is different than CurOp because of recursives with DBDirectClient */
-    class OpDebug {
-    public:
-        OpDebug() : ns(""){ reset(); }
-
-        void reset();
-
-        void recordStats();
-
-        string report( const CurOp& curop ) const;
-
-        /**
-         * Appends stored data and information from curop to the builder.
-         *
-         * @param curop information about the current operation which will be
-         *     use to append data to the builder.
-         * @param builder the BSON builder to use for appending data. Data can
-         *     still be appended even if this method returns false.
-         * @param maxSize the maximum allowed combined size for the query object
-         *     and update object
-         *
-         * @return false if the sum of the sizes for the query object and update
-         *     object exceeded maxSize
-         */
-        bool append(const CurOp& curop, BSONObjBuilder& builder, size_t maxSize) const;
-
-        // -------------------
-        
-        StringBuilder extra; // weird things we need to fix later
-        
-        // basic options
-        int op;
-        bool iscommand;
-        Namespace ns;
-        BSONObj query;
-        BSONObj updateobj;
-        
-        // detailed options
-        long long cursorid;
-        int ntoreturn;
-        int ntoskip;
-        bool exhaust;
-
-        // debugging/profile info
-        long long nscanned;
-        bool idhack;         // indicates short circuited code path on an update to make the update faster
-        bool scanAndOrder;   // scanandorder query plan aspect was used
-        long long  nupdated; // number of records updated (including no-ops)
-        long long  nupdateNoops; // number of records updated which were noops
-        long long  nmoved;   // updates resulted in a move (moves are expensive)
-        long long  ninserted;
-        long long  ndeleted;
-        bool fastmod;
-        bool fastmodinsert;  // upsert of an $operation. builds a default object
-        bool upsert;         // true if the update actually did an insert
-        int keyUpdates;
-
-        // error handling
-        ExceptionInfo exceptionInfo;
-        
-        // response info
-        int executionTime;
-        int nreturned;
-        int responseLength;
-    };
 
     /**
      * stores a copy of a bson obj in a fixed size buffer
@@ -176,6 +110,77 @@ namespace mongo {
         char _buf[512];
     };
 
+    /* lifespan is different than CurOp because of recursives with DBDirectClient */
+    class OpDebug {
+    public:
+        OpDebug() : ns(""){ reset(); }
+
+        void reset();
+
+        void recordStats();
+
+        string report( const CurOp& curop ) const;
+
+        /**
+         * Appends stored data and information from curop to the builder.
+         *
+         * @param curop information about the current operation which will be
+         *     use to append data to the builder.
+         * @param builder the BSON builder to use for appending data. Data can
+         *     still be appended even if this method returns false.
+         * @param maxSize the maximum allowed combined size for the query object
+         *     and update object
+         *
+         * @return false if the sum of the sizes for the query object and update
+         *     object exceeded maxSize
+         */
+        bool append(const CurOp& curop, BSONObjBuilder& builder, size_t maxSize) const;
+
+        // -------------------
+        
+        StringBuilder extra; // weird things we need to fix later
+        
+        // basic options
+        int op;
+        bool iscommand;
+        Namespace ns;
+        BSONObj query;
+        BSONObj updateobj;
+        
+        // detailed options
+        long long cursorid;
+        int ntoreturn;
+        int ntoskip;
+        bool exhaust;
+
+        // debugging/profile info
+        long long nscanned;
+        bool idhack;         // indicates short circuited code path on an update to make the update faster
+        bool scanAndOrder;   // scanandorder query plan aspect was used
+        long long  nupdated; // number of records updated (including no-ops)
+        long long  nModified; // number of records written (no no-ops)
+        long long  nmoved;   // updates resulted in a move (moves are expensive)
+        long long  ninserted;
+        long long  ndeleted;
+        bool fastmod;
+        bool fastmodinsert;  // upsert of an $operation. builds a default object
+        bool upsert;         // true if the update actually did an insert
+        int keyUpdates;
+        ThreadSafeString planSummary; // a brief string describing the query solution
+
+        // New Query Framework debugging/profiling info
+        // TODO: should this really be an opaque BSONObj?  Not sure.
+        CachedBSONObj execStats;
+
+        // error handling
+        ExceptionInfo exceptionInfo;
+        
+        // response info
+        int executionTime;
+        int nreturned;
+        int responseLength;
+    };
+
     /* Current operation (for the current Client).
        an embedded member of Client class, and typically used from within the mutex there.
     */
@@ -192,7 +197,7 @@ namespace mongo {
         void leave( Client::Context * context );
         void reset();
         void reset( const HostAndPort& remote, int op );
-        void markCommand() { _command = true; }
+        void markCommand() { _isCommand = true; }
         OpDebug& debug()           { return _debug; }
         int profileLevel() const   { return _dbprofile; }
         const char * getNS() const { return _ns; }
@@ -270,7 +275,10 @@ namespace mongo {
 
         void setQuery(const BSONObj& query) { _query.set( query ); }
         Client * getClient() const { return _client; }
-
+        
+        Command * getCommand() const { return _command; }
+        void setCommand(Command* command) { _command = command; }
+        
         BSONObj info();
 
         // Fetches less information than "info()"; used to search for ops with certain criteria
@@ -323,12 +331,13 @@ namespace mongo {
         static AtomicUInt _nextOpNum;
         Client * _client;
         CurOp * _wrapped;
+        Command * _command;
         unsigned long long _start;
         unsigned long long _end;
         bool _active;
         bool _suppressFromCurop; // unless $all is set
         int _op;
-        bool _command;
+        bool _isCommand;
         int _dbprofile;                  // 0=off, 1=slow, 2=all
         AtomicUInt _opNum;               // todo: simple being "unsigned" may make more sense here
         char _ns[Namespace::MaxNsLen+2];

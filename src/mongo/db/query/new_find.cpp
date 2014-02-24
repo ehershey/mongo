@@ -35,6 +35,7 @@
 #include "mongo/db/exec/oplogstart.h"
 #include "mongo/db/keypattern.h"
 #include "mongo/db/kill_current_op.h"
+#include "mongo/db/query/find_constants.h"
 #include "mongo/db/query/get_runner.h"
 #include "mongo/db/query/internal_plans.h"
 #include "mongo/db/query/qlog.h"
@@ -45,18 +46,18 @@
 #include "mongo/db/server_options.h"
 #include "mongo/db/server_parameters.h"
 #include "mongo/db/storage_options.h"
-#include "mongo/db/structure/collection.h"
+#include "mongo/db/catalog/collection.h"
 #include "mongo/s/chunk_version.h"
 #include "mongo/s/d_logic.h"
 #include "mongo/s/stale_exception.h"
 #include "mongo/util/mongoutils/str.h"
 
-namespace {
+namespace mongo {
+    // The .h for this in find_constants.h.
+    const int32_t MaxBytesToReturnToClientAtOnce = 4 * 1024 * 1024;
+}  // namespace mongo
 
-    // Copied from db/ops/query.cpp.  Quote:
-    // We cut off further objects once we cross this threshold; thus, you might get
-    // a little bit more than this, it is a threshold rather than a limit.
-    static const int32_t MaxBytesToReturnToClientAtOnce = 4 * 1024 * 1024;
+namespace {
 
     // TODO: Remove this or use it.
     bool hasIndexSpecifier(const mongo::LiteParsedQuery& pq) {
@@ -76,7 +77,7 @@ namespace {
         if (0 == pq.getNumToReturn()) {
             return (len > 1024 * 1024) || n >= 101;
         }
-        return n >= pq.getNumToReturn() || len > MaxBytesToReturnToClientAtOnce;
+        return n >= pq.getNumToReturn() || len > mongo::MaxBytesToReturnToClientAtOnce;
     }
 
     bool enough(const mongo::LiteParsedQuery& pq, int n) {
@@ -93,37 +94,28 @@ namespace {
 
 namespace mongo {
 
-    // Server parameter
-    MONGO_EXPORT_SERVER_PARAMETER(newQueryFrameworkEnabled, bool, true);
-
-    bool isNewQueryFrameworkEnabled() { return newQueryFrameworkEnabled; }
-    void enableNewQueryFramework() { newQueryFrameworkEnabled = true; }
-
-    // Do we use the old or the new?  I call this the spigot.
-    bool canUseNewSystem(const QueryMessage& qm, CanonicalQuery** cqOut) {
-        // This is a read lock.  We require this because if we're parsing a $where, the
-        // where-specific parsing code assumes we have a lock and creates execution machinery that
-        // requires it.
-        Client::ReadContext ctx(qm.ns);
-
-        CanonicalQuery* cq;
-        Status status = CanonicalQuery::canonicalize(qm, &cq);
-        if (!status.isOK()) {
-            QLOG() << "Can't canonicalize query: " << status.toString() << endl;
-            return false;
+    // TODO: Move this and the other command stuff in newRunQuery outta here and up a level.
+    static bool runCommands(const char *ns,
+                            BSONObj& jsobj,
+                            CurOp& curop,
+                            BufBuilder &b,
+                            BSONObjBuilder& anObjBuilder,
+                            bool fromRepl,
+                            int queryOptions) {
+        try {
+            return _runCommands(ns, jsobj, b, anObjBuilder, fromRepl, queryOptions);
         }
-        verify(cq);
-        auto_ptr<CanonicalQuery> scopedCq(cq);
-
-        const LiteParsedQuery& pq = cq->getParsed();
-
-        // We fail to deal well with obscure arguments to .find().
-        if (pq.returnKey()) {
-            QLOG() << "rejecting wacky query args query\n";
-            return false;
+        catch( SendStaleConfigException& ){
+            throw;
         }
+        catch ( AssertionException& e ) {
+            verify( e.getCode() != SendStaleConfigCode && e.getCode() != RecvStaleConfigCode );
 
-        *cqOut = scopedCq.release();
+            Command::appendCommandStatus(anObjBuilder, e.toStatus());
+            curop.debug().exceptionInfo = e.getInfo();
+        }
+        BSONObj x = anObjBuilder.done();
+        b.appendBuf((void*) x.objdata(), x.objsize());
         return true;
     }
 
@@ -138,8 +130,10 @@ namespace mongo {
         BufBuilder bb(bufSize);
         bb.skip(sizeof(QueryResult));
 
-        // This is a read lock.  TODO: There is a cursor flag for not needing this.  Do we care?
-        Client::ReadContext ctx(ns);
+        // This is a read lock.
+        scoped_ptr<Client::ReadContext> ctx(new Client::ReadContext(ns));
+        Collection* collection = ctx->ctx().db()->getCollection(ns);
+        uassert( 17356, "collection dropped between getMore calls", collection );
 
         QLOG() << "running getMore in new system, cursorid " << cursorid << endl;
 
@@ -152,7 +146,7 @@ namespace mongo {
         // A pin performs a CC lookup and if there is a CC, increments the CC's pin value so it
         // doesn't time out.  Also informs ClientCursor that there is somebody actively holding the
         // CC, so don't delete it.
-        ClientCursorPin ccPin(cursorid);
+        ClientCursorPin ccPin(collection, cursorid);
         ClientCursor* cc = ccPin.c();
 
         // These are set in the QueryResult msg we return.
@@ -171,6 +165,9 @@ namespace mongo {
             uassert(17011, "auth error", str::equals(ns, cc->ns().c_str()));
             *isCursorAuthorized = true;
 
+            // Reset timeout timer on the cursor since the cursor is still in use.
+            cc->setIdleTime(0);
+
             // TODO: fail point?
 
             // If the operation that spawned this cursor had a time limit set, apply leftover
@@ -178,12 +175,13 @@ namespace mongo {
             curop.setMaxTimeMicros(cc->getLeftoverMaxTimeMicros());
             killCurrentOp.checkForInterrupt(); // May trigger maxTimeAlwaysTimeOut fail point.
 
-            // TODO:
-            // curop.debug().query = BSONForQuery
-            // curop.setQuery(curop.debug().query);
-
             // TODO: What is pass?
             if (0 == pass) { cc->updateSlaveLocation(curop); }
+
+            if (cc->isAggCursor) {
+                // Agg cursors handle their own locking internally.
+                ctx.reset(); // unlocks
+            }
 
             CollectionMetadataPtr collMetadata = cc->getCollMetadata();
 
@@ -297,13 +295,17 @@ namespace mongo {
         return qr;
     }
 
-    Status getOplogStartHack(CanonicalQuery* cq, Runner** runnerOut) {
+    Status getOplogStartHack(Collection* collection, CanonicalQuery* cq, Runner** runnerOut) {
+        if ( collection == NULL )
+            return Status(ErrorCodes::InternalError,
+                          "getOplogStartHack called with a NULL collection" );
+
         // Make an oplog start finding stage.
         WorkingSet* oplogws = new WorkingSet();
         OplogStart* stage = new OplogStart(cq->ns(), cq->root(), oplogws);
 
         // Takes ownership of ws and stage.
-        auto_ptr<InternalRunner> runner(new InternalRunner(cq->ns(), stage, oplogws));
+        auto_ptr<InternalRunner> runner(new InternalRunner(collection, stage, oplogws));
         runner->setYieldPolicy(Runner::YIELD_AUTO);
 
         // The stage returns a DiskLoc of where to start.
@@ -331,28 +333,79 @@ namespace mongo {
         WorkingSet* ws = new WorkingSet();
         CollectionScan* cs = new CollectionScan(params, ws, cq->root());
         // Takes ownership of cq, cs, ws.
-        *runnerOut = new SingleSolutionRunner(cq, NULL, cs, ws);
+        *runnerOut = new SingleSolutionRunner(collection, cq, NULL, cs, ws);
         return Status::OK();
     }
 
-    /**
-     * This is called by db/ops/query.cpp.  This is the entry point for answering a query.
-     */
-    std::string newRunQuery(CanonicalQuery* cq, CurOp& curop, Message &result) {
-        QLOG() << "Running query on new system: " << cq->toString();
+    std::string newRunQuery(Message& m, QueryMessage& q, CurOp& curop, Message &result) {
+        // Validate the namespace.
+        const char *ns = q.ns;
+        uassert(16332, "can't have an empty ns", ns[0]);
 
-        // This is a read lock.
-        Client::ReadContext ctx(cq->ns(), storageGlobalParams.dbpath);
+        const NamespaceString nsString(ns);
+        uassert(16256, str::stream() << "Invalid ns [" << ns << "]", nsString.isValid());
+
+        // Set curop information.
+        curop.debug().ns = ns;
+        curop.debug().ntoreturn = q.ntoreturn;
+        curop.debug().query = q.query;
+        curop.setQuery(q.query);
+
+        // If the query is really a command, run it.
+        if (nsString.isCommand()) {
+            int nToReturn = q.ntoreturn;
+            uassert(16979, str::stream() << "bad numberToReturn (" << nToReturn
+                                         << ") for $cmd type ns - can only be 1 or -1",
+                    nToReturn == 1 || nToReturn == -1);
+
+            curop.markCommand();
+
+            BufBuilder bb;
+            bb.skip(sizeof(QueryResult));
+
+            BSONObjBuilder cmdResBuf;
+            if (!runCommands(ns, q.query, curop, bb, cmdResBuf, false, q.queryOptions)) {
+                uasserted(13530, "bad or malformed command request?");
+            }
+
+            curop.debug().iscommand = true;
+            // TODO: Does this get overwritten/do we really need to set this twice?
+            curop.debug().query = q.query;
+
+            QueryResult* qr = reinterpret_cast<QueryResult*>(bb.buf());
+            bb.decouple();
+            qr->setResultFlagsToOk();
+            qr->len = bb.len();
+            curop.debug().responseLength = bb.len();
+            qr->setOperation(opReply);
+            qr->cursorId = 0;
+            qr->startingFrom = 0;
+            qr->nReturned = 1;
+            result.setData(qr, true);
+            return "";
+        }
+
+        // This is a read lock.  We require this because if we're parsing a $where, the
+        // where-specific parsing code assumes we have a lock and creates execution machinery that
+        // requires it.
+        Client::ReadContext ctx(q.ns);
+        Collection* collection = ctx.ctx().db()->getCollection( ns );
+
+        // Parse the qm into a CanonicalQuery.
+        CanonicalQuery* cq;
+        Status canonStatus = CanonicalQuery::canonicalize(q, &cq);
+        if (!canonStatus.isOK()) {
+            uasserted(17287, str::stream() << "Can't canonicalize query: " << canonStatus.toString());
+        }
+        verify(cq);
+
+        QLOG() << "Running query on new system: " << cq->toString();
 
         // Parse, canonicalize, plan, transcribe, and get a runner.
         Runner* rawRunner = NULL;
 
         // We use this a lot below.
         const LiteParsedQuery& pq = cq->getParsed();
-
-        // Need to call cq->toString() now, since upon error getRunner doesn't guarantee
-        // cq is in a consistent state.
-        string cqStr = cq->toString();
 
         // We'll now try to get the query runner that will execute this query for us. There
         // are a few cases in which we know upfront which runner we should get and, therefore,
@@ -368,11 +421,11 @@ namespace mongo {
         // Otherwise we go through the selection of which runner is most suited to the
         // query + run-time context at hand.
         Status status = Status::OK();
-        if (ctx.ctx().db()->getCollection(cq->ns()) == NULL) {
+        if (collection == NULL) {
             rawRunner = new EOFRunner(cq, cq->ns());
         }
         else if (pq.hasOption(QueryOption_OplogReplay)) {
-            status = getOplogStartHack(cq, &rawRunner);
+            status = getOplogStartHack(collection, cq, &rawRunner);
         }
         else {
             // Takes ownership of cq.
@@ -384,7 +437,8 @@ namespace mongo {
         }
 
         if (!status.isOK()) {
-            uasserted(17007, "Couldn't get runner for query because: " + status.reason() + " query is " + cqStr);
+            // NOTE: Do not access cq as getRunner has deleted it.
+            uasserted(17007, "Unable to execute query: " + status.reason());
         }
 
         verify(NULL != rawRunner);
@@ -430,10 +484,8 @@ namespace mongo {
 
         // We turn on auto-yielding for the runner here.  The runner registers itself with the
         // active runners list in ClientCursor.
-        ClientCursor::registerRunner(runner.get());
+        auto_ptr<ScopedRunnerRegistration> safety(new ScopedRunnerRegistration(runner.get()));
         runner->setYieldPolicy(Runner::YIELD_AUTO);
-        auto_ptr<DeregisterEvenIfUnderlyingCodeThrows> safety(
-            new DeregisterEvenIfUnderlyingCodeThrows(runner.get()));
 
         BSONObj obj;
         Runner::RunnerState state;
@@ -443,6 +495,20 @@ namespace mongo {
         // to fill in explain information
         const bool isExplain = pq.isExplain();
 
+        // Try to get information about the plan which the runner
+        // will use to execute the query.
+        bool gotPlanInfo = false;
+        PlanInfo* rawInfo;
+        boost::scoped_ptr<PlanInfo> planInfo;
+        Status infoStatus = runner->getInfo(NULL, &rawInfo);
+        if (infoStatus.isOK()) {
+            gotPlanInfo = true;
+            planInfo.reset(rawInfo);
+            // planSummary is really a ThreadSafeString which copies the data from
+            // the provided pointer.
+            curop.debug().planSummary = planInfo->planSummary.c_str();
+        }
+
         while (Runner::RUNNER_ADVANCED == (state = runner->getNext(&obj, NULL))) {
             // Add result to output buffer. This is unnecessary if explain info is requested
             if (!isExplain) {
@@ -451,6 +517,24 @@ namespace mongo {
 
             // Count the result.
             ++numResults;
+
+            // In the case of the multi plan runner, we may not be able to
+            // successfully retrieve plan info until after the query starts
+            // to run. This is because the multi plan runner doesn't know what
+            // plan it will end up using until it runs candidates and selects
+            // the best.
+            //
+            // TODO: Do we ever want to output what the MPR is comparing?
+            if (!gotPlanInfo) {
+                infoStatus = runner->getInfo(NULL, &rawInfo);
+                if (infoStatus.isOK()) {
+                    gotPlanInfo = true;
+                    planInfo.reset(rawInfo);
+                    // planSummary is really a ThreadSafeString which copies the data from
+                    // the provided pointer.
+                    curop.debug().planSummary = planInfo->planSummary.c_str();
+                }
+            }
 
             // Possibly note slave's position in the oplog.
             if (pq.hasOption(QueryOption_OplogReplay)) {
@@ -523,12 +607,17 @@ namespace mongo {
                                            shardingState.getVersion(pq.ns()));
         }
 
-        // Append explain information to query results by asking the runner to produce them.
-        if (isExplain) {
+        // Get explain information if it is needed by either the profiler
+        // or by an explain() query.
+        boost::scoped_ptr<TypeExplain> explain(NULL);
+        if (isExplain || ctx.ctx().db()->getProfilingLevel() > 0) {
+            // Ask the runner to produce explain information.
             TypeExplain* bareExplain;
-            Status res = runner->getExplainPlan(&bareExplain);
-
-            if (!res.isOK()) {
+            Status res = runner->getInfo(&bareExplain, NULL);
+            if (res.isOK()) {
+                explain.reset(bareExplain);
+            }
+            else if (isExplain) {
                 error() << "could not produce explain of query '" << pq.getFilter()
                         << "', error: " << res.reason();
                 // If numResults and the data in bb don't correspond, we'll crash later when rooting
@@ -539,28 +628,27 @@ namespace mongo {
                 numResults = 1;
                 // TODO: we can fill out millis etc. here just fine even if the plan screwed up.
             }
-            else {
-                boost::scoped_ptr<TypeExplain> explain(bareExplain);
+        }
 
-                // Fill in the missing run-time fields in explain, starting with propeties of
-                // the process running the query.
-                std::string server = mongoutils::str::stream()
-                    << getHostNameCached() << ":" << serverGlobalParams.port;
-                explain->setServer(server);
+        // Fill in the missing run-time fields in explain, starting with propeties of
+        // the process running the query.
+        if (isExplain && NULL != explain.get()) {
+            std::string server = mongoutils::str::stream()
+                << getHostNameCached() << ":" << serverGlobalParams.port;
+            explain->setServer(server);
 
-                // We might have skipped some results due to chunk migration etc. so our count is
-                // correct.
-                explain->setN(numResults);
+            // We might have skipped some results due to chunk migration etc. so our count is
+            // correct.
+            explain->setN(numResults);
 
-                // Clock the whole operation.
-                explain->setMillis(curop.elapsedMillis());
+            // Clock the whole operation.
+            explain->setMillis(curop.elapsedMillis());
 
-                BSONObj explainObj = explain->toBSON();
-                bb.appendBuf((void*)explainObj.objdata(), explainObj.objsize());
+            BSONObj explainObj = explain->toBSON();
+            bb.appendBuf((void*)explainObj.objdata(), explainObj.objsize());
 
-                // The explain output is actually a result.
-                numResults = 1;
-            }
+            // The explain output is actually a result.
+            numResults = 1;
         }
 
         long long ccId = 0;
@@ -570,7 +658,8 @@ namespace mongo {
 
             // Allocate a new ClientCursor.  We don't have to worry about leaking it as it's
             // inserted into a global map by its ctor.
-            ClientCursor* cc = new ClientCursor(runner.get(), cq->getParsed().getOptions(),
+            ClientCursor* cc = new ClientCursor(collection, runner.get(),
+                                                cq->getParsed().getOptions(),
                                                 cq->getParsed().getFilter());
             ccId = cc->cursorid();
 
@@ -615,8 +704,31 @@ namespace mongo {
         qr->startingFrom = 0;
         qr->nReturned = numResults;
 
+        // Set debug information for consumption by the profiler.
         curop.debug().ntoskip = pq.getSkip();
         curop.debug().nreturned = numResults;
+        if (NULL != explain.get()) {
+            if (explain->isScanAndOrderSet()) {
+                curop.debug().scanAndOrder = explain->getScanAndOrder();
+            }
+            else {
+                curop.debug().scanAndOrder = false;
+            }
+
+            if (explain->isNScannedSet()) {
+                curop.debug().nscanned = explain->getNScanned();
+            }
+
+            if (explain->isIDHackSet()) {
+                curop.debug().idhack = explain->getIDHack();
+            }
+
+            if (!explain->stats.isEmpty()) {
+                // execStats is a CachedBSONObj because it lives in the race-prone
+                // curop.
+                curop.debug().execStats.set(explain->stats);
+            }
+        }
 
         // curop.debug().exhaust is set above.
         return curop.debug().exhaust ? pq.ns() : "";

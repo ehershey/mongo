@@ -361,7 +361,8 @@ namespace optionenvironment {
                                 sb << "Illegal option assignment: \"" << *keyValueVectorIt << "\"";
                                 return Status(ErrorCodes::BadValue, sb.str());
                             }
-                            if (mapValue.count(key) > 0) {
+                            // Make sure we aren't setting an option to two different values
+                            if (mapValue.count(key) > 0 && mapValue[key] != value) {
                                 StringBuilder sb;
                                 sb << "Key Value Option: " << iterator->_dottedName
                                    << " has a duplicate key from the same source: " << key;
@@ -631,7 +632,7 @@ namespace optionenvironment {
         }
 
         try {
-            po::store(po::command_line_parser(argc, &argv_buffer[0]).
+            po::store(po::command_line_parser(argc, (argc > 0 ? &argv_buffer[0] : NULL)).
                       options(boostOptions).
                       positional(boostPositionalOptions).
                       style(style).

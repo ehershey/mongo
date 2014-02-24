@@ -415,7 +415,8 @@ MongoRunner.mongoOptions = function( opts ){
     }
     
     // Default for waitForConnect is true
-    if (waitForConnect == undefined || waitForConnect == null) opts.waitForConnect = true;
+    opts.waitForConnect = (waitForConnect == undefined || waitForConnect == null) ?
+        true : waitForConnect;
     
     if( jsTestOptions().useSSL ) {
         if (!opts.sslMode) opts.sslMode = "requireSSL";
@@ -687,6 +688,35 @@ MongoRunner.isStopped = function( port ){
     return MongoRunner.usedPortMap[ "" + parseInt( port ) ] ? false : true
 }
 
+/**
+ * Starts an instance of the specified mongo tool
+ *
+ * @param {String} binaryName The name of the tool to run
+ * @param {Object} opts options to pass to the tool
+ *    {
+ *      binVersion {string}: version of tool to run
+ *    }
+ *
+ * @see MongoRunner.arrOptions
+ */
+MongoRunner.runMongoTool = function( binaryName, opts ){
+
+    var opts = opts || {}
+
+    var argsArray = MongoRunner.arrOptions(binaryName, opts)
+
+    return runMongoProgram.apply(null, argsArray);
+
+}
+
+// Given a test name figures out a directory for that test to use for dump files and makes sure
+// that directory exists and is empty.
+MongoRunner.getAndPrepareDumpDirectory = function(testName) {
+    var dir = MongoRunner.dataPath + testName + "_external/";
+    resetDbpath(dir);
+    return dir;
+}
+
 startMongodTest = function (port, dirname, restart, extraOptions ) {
     if (!port)
         port = MongoRunner.nextOpenPort();
@@ -737,9 +767,6 @@ startMongodTest = function (port, dirname, restart, extraOptions ) {
     conn.name = (useHostname ? getHostName() : "localhost") + ":" + port;
 
     if (jsTestOptions().auth || jsTestOptions().keyFile || jsTestOptions().useX509) {
-        if (!this.shardsvr && !options.replSet && !options.hasOwnProperty("slave") && !restart) {
-            jsTest.addAuth(conn);
-        }
         jsTest.authenticate(conn);
     }
     return conn;
@@ -793,6 +820,9 @@ function appendSetParameterArgs(argArray) {
                                     ['--setParameter',
                                      "authenticationMechanisms=" + jsTest.options().authMechanism]);
             }
+        }
+        if (jsTest.options().auth) {
+            argArray.push.apply(argArray, ['--setParameter', "enableLocalhostAuthBypass=false"]);
         }
 
         // mongos only options
@@ -903,8 +933,8 @@ runMongoProgram = function() {
     if ( jsTestOptions().auth ) {
         args = args.slice(1);
         args.unshift( progName,
-                      '-u', jsTestOptions().adminUser,
-                      '-p', jsTestOptions().adminPassword,
+                      '-u', jsTestOptions().authUser,
+                      '-p', jsTestOptions().authPassword,
                       '--authenticationMechanism', DB.prototype._defaultAuthenticationMechanism,
                       '--authenticationDatabase=admin'
                     );
@@ -929,8 +959,8 @@ startMongoProgramNoConnect = function() {
     if ( jsTestOptions().auth ) {
         args = args.slice(1);
         args.unshift(progName,
-                     '-u', jsTestOptions().adminUser,
-                     '-p', jsTestOptions().adminPassword,
+                     '-u', jsTestOptions().authUser,
+                     '-p', jsTestOptions().authPassword,
                      '--authenticationMechanism', DB.prototype._defaultAuthenticationMechanism,
                      '--authenticationDatabase=admin');
     }

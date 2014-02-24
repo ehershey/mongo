@@ -37,37 +37,139 @@
 namespace mongo {
     namespace fts {
 
-        TEST( FTSSpec, Fix1 ) {
-            BSONObj user = BSON( "key" << BSON( "title" << "text" <<
-                                                "text" << "text" ) <<
-                                 "weights" << BSON( "title" << 10 ) );
-
-            BSONObj fixed = FTSSpec::fixSpec( user );
-            BSONObj fixed2 = FTSSpec::fixSpec( fixed );
-            ASSERT_EQUALS( fixed, fixed2 );
-        }
-
-        TEST( FTSSpec, DefaultLanguage1 ) {
-            BSONObj user = BSON( "key" << BSON( "text" << "text" ) <<
-                                 "default_language" << "spanish" );
+        /**
+         * Assert that fixSpec() accepts the provided text index spec.
+         */
+        void assertFixSuccess( const std::string& s ) {
+            BSONObj user = fromjson( s );
 
             try {
+                // fixSpec() should not throw on a valid spec.
                 BSONObj fixed = FTSSpec::fixSpec( user );
+
+                // fixSpec() on an already-fixed spec shouldn't change it.
+                BSONObj fixed2 = FTSSpec::fixSpec( fixed );
+                ASSERT_EQUALS( fixed, fixed2 );
             }
-            catch ( UserException& e ) {
-                ASSERT(false);
+            catch ( UserException& ) {
+                ASSERT( false );
             }
         }
 
-        TEST( FTSSpec, DefaultLanguage2 ) {
-            BSONObj user = BSON( "key" << BSON( "text" << "text" ) <<
-                                 "default_language" << "spanglish" );
+        /**
+         * Assert that fixSpec() rejects the provided text index spec.
+         */
+        void assertFixFailure( const std::string& s ) {
+            BSONObj user = fromjson( s );
 
             try {
+                // fixSpec() on an invalid spec should uassert.
                 BSONObj fixed = FTSSpec::fixSpec( user );
-                ASSERT(false);
             }
-            catch ( UserException& e ) {}
+            catch ( UserException& ) {
+                return;
+            }
+            ASSERT( false );
+        }
+
+        TEST( FTSSpec, FixNormalKey1 ) {
+            assertFixSuccess("{key: {a: 'text'}}");
+            assertFixSuccess("{key: {a: 'text', b: 'text'}}");
+            assertFixSuccess("{key: {a: 'text', b: 'text', c: 'text'}}");
+
+            assertFixFailure("{key: {_fts: 'text'}}"); // not allowed to index reserved field
+            assertFixFailure("{key: {_ftsx: 'text'}}");
+        }
+
+        TEST( FTSSpec, FixCompoundKey1 ) {
+            assertFixSuccess("{key: {a: 'text', b: 1.0}}");
+            assertFixSuccess("{key: {a: 'text', b: NumberInt(1)}}");
+            assertFixSuccess("{key: {a: 'text', b: NumberLong(1)}}");
+            assertFixSuccess("{key: {a: 1.0, b: 'text'}}");
+            assertFixSuccess("{key: {a: NumberInt(1), b: 'text'}}");
+            assertFixSuccess("{key: {a: NumberLong(1), b: 'text'}}");
+            assertFixSuccess("{key: {a: -1, b: 'text'}}");
+            assertFixSuccess("{key: {a: 1, b: 1, c: 'text'}}");
+            assertFixSuccess("{key: {a: 1, b: -1, c: 'text'}}");
+            assertFixSuccess("{key: {a: -1, b: 1, c: 'text'}}");
+            assertFixSuccess("{key: {a: 1, b: 'text', c: 1}}");
+            assertFixSuccess("{key: {a: 'text', b: 1, c: 1}}");
+            assertFixSuccess("{key: {a: 'text', b: 'text', c: 1}}");
+            assertFixSuccess("{key: {a: 1, b: 'text', c: 'text'}}");
+
+            assertFixFailure("{key: {a: 'text', b: 0}}");
+            assertFixFailure("{key: {a: 'text', b: '2d'}}"); // not allowed to mix special indexes
+            assertFixFailure("{key: {a: 'text', b: '1'}}");
+            assertFixFailure("{key: {a: 'text', b: -1}}"); // -1 not allowed in suffix
+            assertFixFailure("{key: {a: 'text', _fts: 1}}");
+            assertFixFailure("{key: {a: 'text', _fts: 'text'}}");
+            assertFixFailure("{key: {a: 'text', _ftsx: 1}}");
+            assertFixFailure("{key: {a: 'text', _ftsx: 'text'}}");
+            assertFixFailure("{key: {a: 'text', b: 1, c: -1}}");
+            assertFixFailure("{key: {a: 'text', b: 1, c: 'text'}}"); // 'text' must all be adjacent
+            assertFixFailure("{key: {a: 'text', b: 1, c: 'text', d: 1}}");
+            assertFixFailure("{key: {a: 1, b: 'text', c: 1, d: 'text', e: 1}}");
+        }
+
+        TEST( FTSSpec, FixDefaultLanguage1 ) {
+            assertFixSuccess("{key: {a: 'text'}, default_language: 'english'}");
+            assertFixSuccess("{key: {a: 'text'}, default_language: 'engLISH'}");
+            assertFixSuccess("{key: {a: 'text'}, default_language: 'en'}");
+            assertFixSuccess("{key: {a: 'text'}, default_language: 'eN'}");
+            assertFixSuccess("{key: {a: 'text'}, default_language: 'spanish'}");
+            assertFixSuccess("{key: {a: 'text'}, default_language: 'none'}");
+
+            assertFixFailure("{key: {a: 'text'}, default_language: 'engrish'}");
+            assertFixFailure("{key: {a: 'text'}, default_language: ' english'}");
+            assertFixFailure("{key: {a: 'text'}, default_language: ''}");
+        }
+
+        TEST( FTSSpec, FixWeights1 ) {
+            assertFixSuccess("{key: {a: 'text'}, weights: {}}");
+            assertFixSuccess("{key: {a: 'text'}, weights: {a: 1.0}}");
+            assertFixSuccess("{key: {a: 'text'}, weights: {a: NumberInt(1)}}");
+            assertFixSuccess("{key: {a: 'text'}, weights: {a: NumberLong(1)}}");
+            assertFixSuccess("{key: {a: 'text'}, weights: {a: 99999}}");
+            assertFixSuccess("{key: {'$**': 'text'}, weights: {'a.b': 2}}");
+            assertFixSuccess("{key: {'$**': 'text'}, weights: {a: 2, b: 2}}");
+            assertFixSuccess("{key: {'$**': 'text'}, weights: {'$**': 2}}");
+
+            assertFixFailure("{key: {a: 'text'}, weights: 0}");
+            assertFixFailure("{key: {a: 'text'}, weights: []}");
+            assertFixFailure("{key: {a: 'text'}, weights: 'x'}");
+            assertFixFailure("{key: {a: 'text'}, weights: {a: 0}}");
+            assertFixFailure("{key: {a: 'text'}, weights: {a: -1}}");
+            assertFixFailure("{key: {a: 'text'}, weights: {a: 100000}}"); // above max weight
+            assertFixFailure("{key: {a: 'text'}, weights: {a: '1'}}");
+            assertFixFailure("{key: {a: 'text'}, weights: {'': 1}}"); // "invalid" path
+            assertFixFailure("{key: {a: 'text'}, weights: {'a.': 1}}");
+            assertFixFailure("{key: {a: 'text'}, weights: {'.a': 1}}");
+            assertFixFailure("{key: {a: 'text'}, weights: {'a..a': 1}}");
+            assertFixFailure("{key: {a: 'text'}, weights: {$a: 1}}");
+            assertFixFailure("{key: {a: 'text'}, weights: {'a.$a': 1}}");
+            assertFixFailure("{key: {a: 'text'}, weights: {'a.$**': 1}}");
+        }
+
+        TEST( FTSSpec, FixLanguageOverride1 ) {
+            assertFixSuccess("{key: {a: 'text'}, language_override: 'foo'}");
+            assertFixSuccess("{key: {a: 'text'}, language_override: 'foo$bar'}");
+
+            assertFixFailure("{key: {a: 'text'}, language_override: 'foo.bar'}"); // can't have '.'
+            assertFixFailure("{key: {a: 'text'}, language_override: ''}");
+            assertFixFailure("{key: {a: 'text'}, language_override: '$foo'}");
+        }
+
+        TEST( FTSSpec, FixTextIndexVersion1 ) {
+            assertFixSuccess("{key: {a: 'text'}, textIndexVersion: 1.0}}");
+            assertFixSuccess("{key: {a: 'text'}, textIndexVersion: NumberInt(1)}}");
+            assertFixSuccess("{key: {a: 'text'}, textIndexVersion: NumberLong(1)}}");
+            assertFixSuccess("{key: {a: 'text'}, textIndexVersion: 2.0}}");
+            assertFixSuccess("{key: {a: 'text'}, textIndexVersion: NumberInt(2)}}");
+            assertFixSuccess("{key: {a: 'text'}, textIndexVersion: NumberLong(2)}}");
+
+            assertFixFailure("{key: {a: 'text'}, textIndexVersion: 3}");
+            assertFixFailure("{key: {a: 'text'}, textIndexVersion: '2'}");
+            assertFixFailure("{key: {a: 'text'}, textIndexVersion: {}}");
         }
 
         TEST( FTSSpec, ScoreSingleField1 ) {
@@ -78,11 +180,7 @@ namespace mongo {
             FTSSpec spec( FTSSpec::fixSpec( user ) );
 
             TermFrequencyMap m;
-            spec.scoreDocument( BSON( "title" << "cat sat run" ),
-                                FTSLanguage::makeFTSLanguage( "english" ).getValue(),
-                                "",
-                                false,
-                                &m );
+            spec.scoreDocument( BSON( "title" << "cat sat run" ), &m );
             ASSERT_EQUALS( 3U, m.size() );
             ASSERT_EQUALS( m["cat"], m["sat"] );
             ASSERT_EQUALS( m["cat"], m["run"] );
@@ -97,11 +195,7 @@ namespace mongo {
             FTSSpec spec( FTSSpec::fixSpec( user ) );
 
             TermFrequencyMap m;
-            spec.scoreDocument( BSON( "title" << "cat sat run" << "text" << "cat book" ),
-                                FTSLanguage::makeFTSLanguage( "english" ).getValue(),
-                                "",
-                                false,
-                                &m );
+            spec.scoreDocument( BSON( "title" << "cat sat run" << "text" << "cat book" ), &m );
 
             ASSERT_EQUALS( 4U, m.size() );
             ASSERT_EQUALS( m["sat"], m["run"] );
@@ -113,6 +207,16 @@ namespace mongo {
             ASSERT( m["book"] < m["sat"] );
         }
 
+        TEST( FTSSpec, ScoreMultipleField2 ) {
+            // Test where one indexed field is a parent component of another indexed field.
+            BSONObj user = BSON( "key" << BSON( "a" << "text" << "a.b" << "text" ) );
+
+            FTSSpec spec( FTSSpec::fixSpec( user ) );
+
+            TermFrequencyMap m;
+            spec.scoreDocument( BSON( "a" << BSON( "b" << "term" ) ), &m );
+            ASSERT_EQUALS( 1U, m.size() );
+        }
 
         TEST( FTSSpec, ScoreRepeatWord ) {
             BSONObj user = BSON( "key" << BSON( "title" << "text" <<
@@ -122,11 +226,7 @@ namespace mongo {
             FTSSpec spec( FTSSpec::fixSpec( user ) );
 
             TermFrequencyMap m;
-            spec.scoreDocument( BSON( "title" << "cat sat sat run run run" ),
-                                FTSLanguage::makeFTSLanguage( "english" ).getValue(),
-                                "",
-                                false,
-                                &m );
+            spec.scoreDocument( BSON( "title" << "cat sat sat run run run" ), &m );
             ASSERT_EQUALS( 3U, m.size() );
             ASSERT( m["cat"] > 0 );
             ASSERT( m["sat"] > m["cat"] );
@@ -195,11 +295,7 @@ namespace mongo {
             // The following document matches {"a.b": {$type: 2}}, so "term" should be indexed.
             BSONObj obj = fromjson("{a: [{b: ['term']}]}"); // indirectly nested arrays
             TermFrequencyMap m;
-            spec.scoreDocument( obj,
-                                FTSLanguage::makeFTSLanguage( "english" ).getValue(),
-                                "",
-                                false,
-                                &m );
+            spec.scoreDocument( obj, &m );
             ASSERT_EQUALS( 1U, m.size() );
         }
 
@@ -210,11 +306,7 @@ namespace mongo {
             // The wildcard spec implies a full recursive traversal, so "term" should be indexed.
             BSONObj obj = fromjson("{a: {b: [['term']]}}"); // directly nested arrays
             TermFrequencyMap m;
-            spec.scoreDocument( obj,
-                                FTSLanguage::makeFTSLanguage( "english" ).getValue(),
-                                "",
-                                false,
-                                &m );
+            spec.scoreDocument( obj, &m );
             ASSERT_EQUALS( 1U, m.size() );
         }
 
@@ -226,11 +318,7 @@ namespace mongo {
             // indexed.
             BSONObj obj = fromjson("{a: {b: [['term']]}}"); // directly nested arrays
             TermFrequencyMap m;
-            spec.scoreDocument( obj,
-                                FTSLanguage::makeFTSLanguage( "english" ).getValue(),
-                                "",
-                                false,
-                                &m );
+            spec.scoreDocument( obj, &m );
             ASSERT_EQUALS( 0U, m.size() );
         }
 
@@ -249,11 +337,7 @@ namespace mongo {
                 "   }"
                 " }" );
 
-            spec.scoreDocument( obj,
-                                FTSLanguage::makeFTSLanguage( "english" ).getValue(),
-                                "",
-                                false,
-                                &tfm );
+            spec.scoreDocument( obj, &tfm );
 
             set<string> hits;
             hits.insert("walk");
@@ -284,11 +368,7 @@ namespace mongo {
                 "  }"
                 "}" );
 
-            spec.scoreDocument( obj,
-                                FTSLanguage::makeFTSLanguage( "english" ).getValue(),
-                                "",
-                                false,
-                                &tfm );
+            spec.scoreDocument( obj, &tfm );
 
             set<string> hits;
             hits.insert("foredrag");
@@ -319,11 +399,7 @@ namespace mongo {
                 "  } ]"
                 "}" );
 
-            spec.scoreDocument( obj,
-                                FTSLanguage::makeFTSLanguage( "english" ).getValue(),
-                                "",
-                                false,
-                                &tfm );
+            spec.scoreDocument( obj, &tfm );
 
             set<string> hits;
             hits.insert("foredrag");
@@ -356,11 +432,7 @@ namespace mongo {
                 "  }"
                 "}" );
 
-            spec.scoreDocument( obj,
-                                FTSLanguage::makeFTSLanguage( "english" ).getValue(),
-                                "",
-                                false,
-                                &tfm );
+            spec.scoreDocument( obj, &tfm );
 
             set<string> hits;
             hits.insert("foredrag");
@@ -393,11 +465,7 @@ namespace mongo {
                 "  }"
                 "}" );
 
-            spec.scoreDocument( obj,
-                                FTSLanguage::makeFTSLanguage( "english" ).getValue(),
-                                "",
-                                false,
-                                &tfm );
+            spec.scoreDocument( obj, &tfm );
 
             set<string> hits;
             hits.insert("foredrag");
@@ -432,11 +500,7 @@ namespace mongo {
                 "  }"
                 "}" );
 
-            spec.scoreDocument( obj,
-                                FTSLanguage::makeFTSLanguage( "english" ).getValue(),
-                                "",
-                                false,
-                                &tfm );
+            spec.scoreDocument( obj, &tfm );
 
             set<string> hits;
             hits.insert("foredrag");
@@ -451,6 +515,52 @@ namespace mongo {
 
         }
 
+        /** Test differences across textIndexVersion values in handling of nested arrays. */
+        TEST( FTSSpec, TextIndexLegacyNestedArrays ) {
+            BSONObj obj = fromjson( "{a: [{b: ['hello']}]}" );
+
+            // textIndexVersion=1 FTSSpec objects do not index nested arrays.
+            {
+                BSONObj indexSpec = fromjson( "{key: {'a.b': 'text'}, textIndexVersion: 1}" ); 
+                FTSSpec spec( FTSSpec::fixSpec( indexSpec ) );
+                TermFrequencyMap tfm;
+                spec.scoreDocument( obj, &tfm );
+                ASSERT_EQUALS( tfm.size(), 0U );
+            }
+
+            // textIndexVersion=2 FTSSpec objects do index nested arrays.
+            {
+                BSONObj indexSpec = fromjson( "{key: {'a.b': 'text'}, textIndexVersion: 2}" ); 
+                FTSSpec spec( FTSSpec::fixSpec( indexSpec ) );
+                TermFrequencyMap tfm;
+                spec.scoreDocument( obj, &tfm );
+                ASSERT_EQUALS( tfm.size(), 1U );
+            }
+        }
+
+        /** Test differences across textIndexVersion values in handling of language annotations. */
+        TEST( FTSSpec, TextIndexLegacyLanguageRecognition) {
+            BSONObj obj = fromjson( "{a: 'the', language: 'EN'}" );
+
+            // textIndexVersion=1 FTSSpec objects treat two-letter language annotations as "none"
+            // for purposes of stopword processing.
+            {
+                BSONObj indexSpec = fromjson( "{key: {'a': 'text'}, textIndexVersion: 1}" ); 
+                FTSSpec spec( FTSSpec::fixSpec( indexSpec ) );
+                TermFrequencyMap tfm;
+                spec.scoreDocument( obj, &tfm );
+                ASSERT_EQUALS( tfm.size(), 1U ); // "the" not recognized as stopword
+            }
+
+            // textIndexVersion=2 FTSSpec objects recognize two-letter codes.
+            {
+                BSONObj indexSpec = fromjson( "{key: {'a': 'text'}, textIndexVersion: 2}" ); 
+                FTSSpec spec( FTSSpec::fixSpec( indexSpec ) );
+                TermFrequencyMap tfm;
+                spec.scoreDocument( obj, &tfm );
+                ASSERT_EQUALS( tfm.size(), 0U ); // "the" recognized as stopword
+            }
+        }
 
     }
 }

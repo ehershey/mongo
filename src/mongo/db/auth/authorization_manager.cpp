@@ -40,6 +40,7 @@
 #include "mongo/bson/mutable/document.h"
 #include "mongo/bson/mutable/element.h"
 #include "mongo/bson/util/bson_extract.h"
+#include "mongo/client/auth_helpers.h"
 #include "mongo/db/auth/action_set.h"
 #include "mongo/db/auth/authz_documents_update_guard.h"
 #include "mongo/db/auth/authz_manager_external_state.h"
@@ -96,7 +97,6 @@ namespace mongo {
 
     const BSONObj AuthorizationManager::versionDocumentQuery = BSON("_id" << "authSchema");
 
-    const std::string AuthorizationManager::schemaVersionServerParameter = "authSchemaVersion";
     const std::string AuthorizationManager::schemaVersionFieldName = "currentVersion";
 
 #ifndef _MSC_EXTENSIONS
@@ -913,6 +913,24 @@ namespace {
                             const BSONObj& oldUserDoc,
                             const BSONObj& writeConcern) {
 
+        uassert(17387,
+                mongoutils::str::stream() << "While preparing to upgrade user doc from the 2.4 "
+                        "user data schema to the 2.6 schema, found a user doc with a "
+                        "\"credentials\" field, indicating that the doc already has the new "
+                        "schema. Make sure that all documents in admin.system.users have the same "
+                        "user data schema and that the version document in admin.system.version "
+                        "indicates the correct schema version.  User doc found: " <<
+                        oldUserDoc.toString(),
+                !oldUserDoc.hasField("credentials"));
+
+        uassert(17386,
+                mongoutils::str::stream() << "While preparing to upgrade user doc from "
+                        "the 2.4 user data schema to the 2.6 schema, found a user doc "
+                        "that doesn't conform to the 2.4 *or* 2.6 schema.  Doc found: "
+                        << oldUserDoc.toString(),
+                oldUserDoc.hasField("user") &&
+                        (oldUserDoc.hasField("userSource") || oldUserDoc.hasField("pwd")));
+
         std::string oldUserSource;
         uassertStatusOK(bsonExtractStringFieldWithDefault(
                                 oldUserDoc,
@@ -927,7 +945,6 @@ namespace {
         BSONObj query = BSON("_id" << oldUserSource + "." + oldUserName);
 
         BSONObjBuilder updateBuilder;
-
         {
             BSONObjBuilder toSetBuilder(updateBuilder.subobjStart("$set"));
             toSetBuilder << "user" << oldUserName << "db" << oldUserSource;
@@ -1007,8 +1024,8 @@ namespace {
                 }
             }
         }
+        BSONObj update = updateBuilder.obj();
 
-        BSONObj update = updateBuilder.done();
         uassertStatusOK(externalState->updateOne(
                                 AuthorizationManager::usersAltCollectionNamespace,
                                 query,
@@ -1290,6 +1307,25 @@ namespace {
         }
     }
 
+    Status AuthorizationManager::upgradeSchema(int maxSteps, const BSONObj& writeConcern) {
+
+        if (maxSteps < 1) {
+            return Status(ErrorCodes::BadValue,
+                          "Minimum value for maxSteps parameter to upgradeSchema is 1");
+        }
+        invalidateUserCache();
+        for (int i = 0; i < maxSteps; ++i) {
+            bool isDone;
+            Status status = upgradeSchemaStep(writeConcern, &isDone);
+            invalidateUserCache();
+            if (!status.isOK() || isDone) {
+                return status;
+            }
+        }
+        return Status(ErrorCodes::OperationIncomplete, mongoutils::str::stream() <<
+                      "Auth schema upgrade incomplete after " << maxSteps << " successful steps.");
+    }
+
 namespace {
     bool isAuthzNamespace(const StringData& ns) {
         return (ns == AuthorizationManager::rolesCollectionNamespace.ns() ||
@@ -1318,7 +1354,10 @@ namespace {
             return isAuthzCollection(cmdObj.firstElement().str()) ||
                 isAuthzCollection(cmdObj["to"].str());
         }
-        else if (cmdName == "dropIndexes") {
+        else if (cmdName == "dropIndexes" || cmdName == "deleteIndexes") {
+            return false;
+        }
+        else if (cmdName == "create") {
             return false;
         }
         else {

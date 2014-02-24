@@ -54,6 +54,44 @@ namespace {
         std::string _config;
     };
 
+    TEST(Registration, EmptySingleName) {
+        moe::OptionSection testOpts;
+        try {
+            testOpts.addOptionChaining("dup", "", moe::Switch, "dup");
+            testOpts.addOptionChaining("new", "", moe::Switch, "dup");
+        }
+        catch (::mongo::DBException &e) {
+            ::mongo::StringBuilder sb;
+            sb << "Was not able to register two options with empty single name: " << e.what();
+            FAIL(sb.str());
+        }
+
+        // This should fail now, because we didn't specify that these options were not valid in the
+        // INI config or on the command line
+        std::vector<std::string> argv;
+        std::map<std::string, std::string> env_map;
+        moe::OptionsParser parser;
+        moe::Environment environment;
+        ASSERT_NOT_OK(parser.run(testOpts, argv, env_map, &environment));
+
+        moe::OptionSection testOptsValid;
+        try {
+            testOptsValid.addOptionChaining("dup", "", moe::Switch, "dup")
+                                           .setSources(moe::SourceYAMLConfig);
+            testOptsValid.addOptionChaining("new", "", moe::Switch, "dup")
+                                           .setSources(moe::SourceYAMLConfig);
+        }
+        catch (::mongo::DBException &e) {
+            ::mongo::StringBuilder sb;
+            sb << "Was not able to register two options with empty single name" << e.what();
+            FAIL(sb.str());
+        }
+
+        // This should pass now, because we specified that these options were not valid in the INI
+        // config or on the command line
+        ASSERT_OK(parser.run(testOptsValid, argv, env_map, &environment));
+    }
+
     TEST(Registration, DuplicateSingleName) {
         moe::OptionSection testOpts;
         try {
@@ -61,7 +99,7 @@ namespace {
             testOpts.addOptionChaining("new", "dup", moe::Switch, "dup");
             FAIL("Was able to register duplicate single name");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
         }
     }
 
@@ -72,7 +110,7 @@ namespace {
             testOpts.addOptionChaining("dup", "new", moe::Switch, "dup");
             FAIL("Was able to register duplicate single name");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
         }
     }
 
@@ -85,7 +123,7 @@ namespace {
                                       .positional(1, 1);
             FAIL("Was able to register duplicate positional option");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
         }
     }
 
@@ -96,35 +134,35 @@ namespace {
                                       .positional(-1, 1);
             FAIL("Was able to register positional with negative start for range");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
         }
         try {
             testOpts.addOptionChaining("positional1", "positional1", moe::String, "Positional")
                                       .positional(2, 1);
             FAIL("Was able to register positional with start of range larger than end");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
         }
         try {
             testOpts.addOptionChaining("positional1", "positional1", moe::String, "Positional")
                                       .positional(1, -2);
             FAIL("Was able to register positional with bad end of range");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
         }
         try {
             testOpts.addOptionChaining("positional1", "positional1", moe::String, "Positional")
                                       .positional(0, 1);
             FAIL("Was able to register positional with bad start of range");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
         }
         try {
             testOpts.addOptionChaining("positional1", "positional1", moe::String, "Positional")
                                       .positional(1, 2);
             FAIL("Was able to register multi valued positional with non StringVector type");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
         }
     }
 
@@ -135,7 +173,7 @@ namespace {
                                       .setDefault(moe::Value("String"));
             FAIL("Was able to register default value with wrong type");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
         }
     }
 
@@ -146,7 +184,7 @@ namespace {
                                       .setImplicit(moe::Value("String"));
             FAIL("Was able to register implicit value with wrong type");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
         }
     }
 
@@ -157,7 +195,7 @@ namespace {
                                        "Multiple Values").composing();
             FAIL("Was able to register composable option with wrong type");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
         }
     }
 
@@ -172,7 +210,7 @@ namespace {
                                       .composing();
             FAIL("Was able to register composable option with implicit value");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
         }
 
         try {
@@ -184,7 +222,7 @@ namespace {
                                       .setImplicit(moe::Value(implicitVal));
             FAIL("Was able to set implicit value on composable option");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
         }
     }
 
@@ -199,7 +237,7 @@ namespace {
                                       .composing();
             FAIL("Was able to register composable option with default value");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
         }
 
         try {
@@ -211,7 +249,7 @@ namespace {
                                       .setDefault(moe::Value(defaultVal));
             FAIL("Was able to set default value on composable option");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
         }
     }
 
@@ -224,7 +262,18 @@ namespace {
                                       .validRange(1000, 65535);
             FAIL("Was able to register non numeric option with constraint on range");
         }
-        catch (::mongo::DBException &e) {
+        catch (::mongo::DBException&) {
+        }
+    }
+
+    TEST(Registration, StringFormatConstraint) {
+        moe::OptionSection testOpts;
+        try {
+            testOpts.addOptionChaining("port", "port", moe::Int, "Port")
+                                      .format("[0-9]*", "[0-9]*");
+            FAIL("Was able to register non string option with constraint on format");
+        }
+        catch (::mongo::DBException&) {
         }
     }
 
@@ -3029,6 +3078,49 @@ namespace {
         ASSERT_OK(environment.get(moe::Key("section.option2"), &value));
     }
 
+    TEST(Constraints, StringFormatConstraint) {
+        OptionsParserTester parser;
+        moe::Environment environment;
+        moe::Value value;
+        std::vector<std::string> argv;
+        std::map<std::string, std::string> env_map;
+
+        moe::OptionSection testOpts;
+        testOpts.addOptionChaining("option", "option", moe::String, "Option")
+                                  .format("[a-z][0-9]", "[character][number]");
+
+        environment = moe::Environment();
+        argv.clear();
+        argv.push_back("binaryname");
+        argv.push_back("--option");
+        argv.push_back("aa");
+
+        ASSERT_OK(parser.run(testOpts, argv, env_map, &environment));
+        ASSERT_NOT_OK(environment.validate());;
+
+        environment = moe::Environment();
+        argv.clear();
+        argv.push_back("binaryname");
+        argv.push_back("--option");
+        argv.push_back("11");
+
+        ASSERT_OK(parser.run(testOpts, argv, env_map, &environment));
+        ASSERT_NOT_OK(environment.validate());;
+
+        environment = moe::Environment();
+        argv.clear();
+        argv.push_back("binaryname");
+        argv.push_back("--option");
+        argv.push_back("a1");
+
+        ASSERT_OK(parser.run(testOpts, argv, env_map, &environment));
+        ASSERT_OK(environment.validate());
+        ASSERT_OK(environment.get(moe::Key("option"), &value));
+        std::string option;
+        ASSERT_OK(value.get(&option));
+        ASSERT_EQUALS(option, "a1");
+    }
+
     TEST(YAMLConfigFile, Basic) {
         OptionsParserTester parser;
         moe::Environment environment;
@@ -3736,6 +3828,24 @@ namespace {
 
         moe::Value value;
         ASSERT_NOT_OK(parser.run(testOpts, argv, env_map, &environment));
+    }
+
+    TEST(OptionCount, Basic) {
+        OptionsParserTester parser;
+        moe::Environment environment;
+
+        moe::OptionSection testOpts;
+        testOpts.addOptionChaining("basic", "basic", moe::String, "Basic Option");
+        testOpts.addOptionChaining("hidden", "hidden", moe::String, "Hidden Option").hidden();
+
+        moe::OptionSection subSection("Section Name");
+        subSection.addOptionChaining("port", "port", moe::Int, "Port")
+                                    .setSources(moe::SourceYAMLConfig);
+        testOpts.addSection(subSection);
+
+        int numOptions;
+        ASSERT_OK(testOpts.countOptions(&numOptions, true /*visibleOnly*/, moe::SourceCommandLine));
+        ASSERT_EQUALS(numOptions, 1);
     }
 
 } // unnamed namespace

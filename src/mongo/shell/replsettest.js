@@ -49,7 +49,6 @@ ReplSetTest = function( opts ){
     this.name  = opts.name || "testReplSet";
     this.useHostName = opts.useHostName == undefined ? true : opts.useHostName;
     this.host  = this.useHostName ? (opts.host || getHostName()) : 'localhost';
-    this.numNodes = opts.nodes || 0;
     this.oplogSize = opts.oplogSize || 40;
     this.useSeedList = opts.useSeedList || false;
     this.ports = [];
@@ -59,24 +58,25 @@ ReplSetTest = function( opts ){
     this.startPort = opts.startPort || 31000;
 
     this.nodeOptions = {}    
-    if( isObject( this.numNodes ) ){
+    if( isObject( opts.nodes ) ){
         var len = 0
-        for( var i in this.numNodes ){
+        for( var i in opts.nodes ){
             var options = this.nodeOptions[ "n" + len ] = Object.merge(opts.nodeOptions, 
-                                                                       this.numNodes[i]);
+                                                                       opts.nodes[i]);
             if( i.startsWith( "a" ) ) options.arbiter = true;
             len++
         }
         this.numNodes = len
     }
-    else if( Array.isArray( this.numNodes ) ){
-        for( var i = 0; i < this.numNodes.length; i++ )
-            this.nodeOptions[ "n" + i ] = Object.merge(opts.nodeOptions, this.numNodes[i]);
-        this.numNodes = this.numNodes.length
+    else if( Array.isArray( opts.nodes ) ){
+        for( var i = 0; i < opts.nodes.length; i++ )
+            this.nodeOptions[ "n" + i ] = Object.merge(opts.nodeOptions, opts.nodes[i]);
+        this.numNodes = opts.nodes.length
     }
     else {
-        for ( var i =0; i < this.numNodes; i++ )
+        for ( var i =0; i < opts.nodes; i++ )
             this.nodeOptions[ "n" + i ] = opts.nodeOptions;
+        this.numNodes = opts.nodes;
     }
     
     this.ports = allocatePorts( this.numNodes , this.startPort );
@@ -117,7 +117,7 @@ ReplSetTest.prototype.getNodeId = function(node) {
         }
     }
     
-    if( node.nodeId ) return parseInt( node.nodeId )
+    if( node.nodeId != null ) return parseInt( node.nodeId )
     
     return undefined
     
@@ -422,7 +422,7 @@ ReplSetTest.prototype.add = function( config ) {
   var nextId = this.nodes.length;
   printjson(this.nodes);
   print("ReplSetTest nextId:" + nextId);
-  var newNode = this.start( nextId );
+  var newNode = this.start( nextId, config );
   
   return newNode;
 }
@@ -454,7 +454,6 @@ ReplSetTest.prototype.initiate = function( cfg , initCmd , timeout ) {
     if ((jsTestOptions().keyFile || jsTestOptions().useX509) && 
           cmdKey == 'replSetInitiate') {
         master = this.getMaster();
-        jsTest.addAuth(master);
         jsTest.authenticateNodes(this.nodes);
     }
 }
@@ -791,14 +790,14 @@ ReplSetTest.prototype.stopSet = function( signal , forRestart, opts ) {
             resetDbpath( this._alldbpaths[i] );
         }
     }
-    if ( this.bridges ) {
-        var mybridgevec;
-        while (mybridgevec = this.bridges.pop()) {
-            var mybridge;
-            while (mybridge = mybridgevec.pop()) {
-                mybridge.stop();
-            }       
-        }
+    if (this.bridges) {
+        for (var i = 0; i < this.bridges.length; i++) {
+            for (var j = 0; j < this.bridges[i].length; j++) {
+                if (this.bridges[i][j] && this.bridges[i][j].port) {
+                    this.bridges[i][j].stop();
+                }
+            }
+        }   
     }
     
     print('ReplSetTest stopSet *** Shut down repl set - test worked ****' )

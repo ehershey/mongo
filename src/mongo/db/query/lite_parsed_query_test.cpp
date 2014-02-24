@@ -32,11 +32,9 @@
 
 #include "mongo/db/query/lite_parsed_query.h"
 
-#include <sstream>
 #include "mongo/db/json.h"
 #include "mongo/unittest/unittest.h"
 
-using std::stringstream;
 using namespace mongo;
 
 namespace {
@@ -44,14 +42,135 @@ namespace {
     TEST(LiteParsedQueryTest, InitSortOrder) {
         LiteParsedQuery* lpq = NULL;
         Status result = LiteParsedQuery::make("testns", 0, 1, 0, BSONObj(), BSONObj(),
-                                              fromjson("{a: 1}"), BSONObj(), &lpq);
+                                              fromjson("{a: 1}"), BSONObj(),
+                                              BSONObj(), BSONObj(), false,
+                                              &lpq);
         ASSERT_OK(result);
     }
 
     TEST(LiteParsedQueryTest, InitSortOrderString) {
         LiteParsedQuery* lpq = NULL;
         Status result = LiteParsedQuery::make("testns", 0, 1, 0, BSONObj(), BSONObj(),
-                                              fromjson("{a: \"\"}"), BSONObj(), &lpq);
+                                              fromjson("{a: \"\"}"), BSONObj(),
+                                              BSONObj(), BSONObj(), false,
+                                              &lpq);
+        ASSERT_NOT_OK(result);
+    }
+
+    TEST(LiteParsedQueryTest, GetFilter) {
+        LiteParsedQuery* lpq = NULL;
+        Status result = LiteParsedQuery::make("testns", 5, 6, 9, BSON( "x" << 5 ), BSONObj(),
+                                              BSONObj(), BSONObj(),
+                                              BSONObj(), BSONObj(),
+                                              false, &lpq);
+        ASSERT_OK(result);
+        ASSERT_EQUALS(BSON("x" << 5 ), lpq->getFilter());
+    }
+
+    TEST(LiteParsedQueryTest, NumToReturn) {
+        LiteParsedQuery* lpq = NULL;
+        Status result = LiteParsedQuery::make("testns", 5, 6, 9, BSON( "x" << 5 ), BSONObj(),
+                                              BSONObj(), BSONObj(),
+                                              BSONObj(), BSONObj(),
+                                              false, &lpq);
+        ASSERT_OK(result);
+        ASSERT_EQUALS(6, lpq->getNumToReturn());
+        ASSERT(lpq->wantMore());
+
+        lpq = NULL;
+        result = LiteParsedQuery::make("testns", 5, -6, 9, BSON( "x" << 5 ), BSONObj(),
+                                       BSONObj(), BSONObj(),
+                                       BSONObj(), BSONObj(),
+                                       false, &lpq);
+        ASSERT_OK(result);
+        ASSERT_EQUALS(6, lpq->getNumToReturn());
+        ASSERT(!lpq->wantMore());
+    }
+
+    TEST(LiteParsedQueryTest, MinFieldsNotPrefixOfMax) {
+        LiteParsedQuery* lpq = NULL;
+        Status result = LiteParsedQuery::make("testns", 0, 0, 0, BSONObj(), BSONObj(),
+                                              BSONObj(), BSONObj(),
+                                              fromjson("{a: 1}"), fromjson("{b: 1}"),
+                                              false, &lpq);
+        ASSERT_NOT_OK(result);
+    }
+
+    TEST(LiteParsedQueryTest, MinFieldsMoreThanMax) {
+        LiteParsedQuery* lpq = NULL;
+        Status result = LiteParsedQuery::make("testns", 0, 0, 0, BSONObj(), BSONObj(),
+                                              BSONObj(), BSONObj(),
+                                              fromjson("{a: 1, b: 1}"), fromjson("{a: 1}"),
+                                              false, &lpq);
+        ASSERT_NOT_OK(result);
+    }
+
+    TEST(LiteParsedQueryTest, MinFieldsLessThanMax) {
+        LiteParsedQuery* lpq = NULL;
+        Status result = LiteParsedQuery::make("testns", 0, 0, 0, BSONObj(), BSONObj(),
+                                              BSONObj(), BSONObj(),
+                                              fromjson("{a: 1}"), fromjson("{a: 1, b: 1}"),
+                                              false, &lpq);
+        ASSERT_NOT_OK(result);
+    }
+
+    // Helper function which returns the Status of creating a LiteParsedQuery object with the given
+    // parameters.
+    Status makeLiteParsedQuery(const BSONObj& query, const BSONObj& proj, const BSONObj& sort) {
+        LiteParsedQuery* lpqRaw;
+        Status result = LiteParsedQuery::make("testns", 0, 0, 0, query, proj, sort, BSONObj(),
+                                              BSONObj(), BSONObj(), false, &lpqRaw);
+        if (result.isOK()) {
+            boost::scoped_ptr<LiteParsedQuery> lpq(lpqRaw);
+        }
+
+        return result;
+    }
+
+    //
+    // Test compatibility of various projection and sort objects.
+    //
+
+    TEST(LiteParsedQueryTest, ValidSortProj) {
+        Status result = Status::OK();
+
+        result = makeLiteParsedQuery(BSONObj(),
+                                     fromjson("{a: 1}"),
+                                     fromjson("{a: 1}"));
+        ASSERT_OK(result);
+
+        result = makeLiteParsedQuery(BSONObj(),
+                                     fromjson("{a: {$meta: \"textScore\"}}"),
+                                     fromjson("{a: {$meta: \"textScore\"}}"));
+        ASSERT_OK(result);
+
+    }
+
+    TEST(LiteParsedQueryTest, ForbidNonMetaSortOnFieldWithMetaProject) {
+        Status result = Status::OK();
+
+        result = makeLiteParsedQuery(BSONObj(),
+                                     fromjson("{a: {$meta: \"textScore\"}}"),
+                                     fromjson("{a: 1}"));
+        ASSERT_NOT_OK(result);
+
+        result = makeLiteParsedQuery(BSONObj(),
+                                     fromjson("{a: {$meta: \"textScore\"}}"),
+                                     fromjson("{b: 1}"));
+        ASSERT_OK(result);
+    }
+
+    TEST(LiteParsedQueryTest, ForbidMetaSortOnFieldWithoutMetaProject) {
+        Status result = Status::OK();
+
+        result = makeLiteParsedQuery(BSONObj(),
+                                     fromjson("{a: 1}"),
+                                     fromjson("{a: {$meta: \"textScore\"}}"));
+        ASSERT_NOT_OK(result);
+
+        result = makeLiteParsedQuery(BSONObj(),
+                                     fromjson("{b: 1}"),
+                                     fromjson("{a: {$meta: \"textScore\"}}"));
         ASSERT_NOT_OK(result);
     }
 
@@ -59,39 +178,39 @@ namespace {
     // Text meta BSON element validation
     //
 
-    bool isFirstElementTextMeta(const char* sortStr) {
+    bool isFirstElementTextScoreMeta(const char* sortStr) {
         BSONObj sortObj = fromjson(sortStr);
         BSONElement elt = sortObj.firstElement();
-        bool result = LiteParsedQuery::isTextMeta(elt);
+        bool result = LiteParsedQuery::isTextScoreMeta(elt);
         return result;
     }
 
     // Check validation of $meta expressions
-    TEST(LiteParsedQueryTest, IsTextMeta) {
-        // Valid text meta sort
-        ASSERT(isFirstElementTextMeta("{a: {$meta: \"text\"}}"));
+    TEST(LiteParsedQueryTest, IsTextScoreMeta) {
+        // Valid textScore meta sort
+        ASSERT(isFirstElementTextScoreMeta("{a: {$meta: \"textScore\"}}"));
 
-        // Invalid text meta sorts
-        ASSERT_FALSE(isFirstElementTextMeta("{a: {$meta: 1}}"));
-        ASSERT_FALSE(isFirstElementTextMeta("{a: {$meta: \"image\"}}"));
-        ASSERT_FALSE(isFirstElementTextMeta("{a: {$world: \"text\"}}"));
-        ASSERT_FALSE(isFirstElementTextMeta("{a: {$meta: \"text\", b: 1}}"));
+        // Invalid textScore meta sorts
+        ASSERT_FALSE(isFirstElementTextScoreMeta("{a: {$meta: 1}}"));
+        ASSERT_FALSE(isFirstElementTextScoreMeta("{a: {$meta: \"image\"}}"));
+        ASSERT_FALSE(isFirstElementTextScoreMeta("{a: {$world: \"textScore\"}}"));
+        ASSERT_FALSE(isFirstElementTextScoreMeta("{a: {$meta: \"textScore\", b: 1}}"));
     }
 
     void testSortOrder(bool expectedValid, const char* expectedStr, const char* sortStr) {
         BSONObj sortOrder = fromjson(sortStr);
         bool valid = LiteParsedQuery::isValidSortOrder(sortOrder);
         if (expectedValid != valid) {
-            stringstream ss;
+            mongoutils::str::stream ss;
             ss << sortStr << ": unexpected validation result. Expected: " << expectedValid;
-            FAIL(ss.str());
+            FAIL(ss);
         }
         BSONObj normalizedSortOrder = LiteParsedQuery::normalizeSortOrder(sortOrder);
         if (fromjson(expectedStr) != normalizedSortOrder) {
-            stringstream ss;
+            mongoutils::str::stream ss;
             ss << sortStr << ": unexpected normalization result. Expected: " << expectedStr
                << ". Actual: " << normalizedSortOrder.toString();
-            FAIL(ss.str());
+            FAIL(ss);
         }
     }
 
@@ -100,7 +219,7 @@ namespace {
     // In a valid sort order, each element satisfies one of:
     // 1. a number with value 1
     // 2. a number with value -1
-    // 3. isTextMeta
+    // 3. isTextScoreMeta
     //
 
     TEST(LiteParsedQueryTest, NormalizeAndValidateSortOrder) {
@@ -108,7 +227,7 @@ namespace {
         testSortOrder(true, "{}", "{}");
         testSortOrder(true, "{a: 1}", "{a: 1}");
         testSortOrder(true, "{a: -1}", "{a: -1}");
-        testSortOrder(true, "{a: {$meta: \"text\"}}", "{a: {$meta: \"text\"}}");
+        testSortOrder(true, "{a: {$meta: \"textScore\"}}", "{a: {$meta: \"textScore\"}}");
 
         // Invalid sorts
         testSortOrder(false, "{a: 1}", "{a: 100}");
@@ -127,8 +246,8 @@ namespace {
         testSortOrder(false, "{a: 1}", "{a: \"bb\"}");
         testSortOrder(false, "{a: 1}", "{a: {$meta: 1}}");
         testSortOrder(false, "{a: 1}", "{a: {$meta: \"image\"}}");
-        testSortOrder(false, "{a: 1}", "{a: {$world: \"text\"}}");
-        testSortOrder(false, "{a: 1}", "{a: {$meta: \"text\", b: 1}}");
+        testSortOrder(false, "{a: 1}", "{a: {$world: \"textScore\"}}");
+        testSortOrder(false, "{a: 1}", "{a: {$meta: \"textScore\", b: 1}}");
     }
 
 }  // namespace

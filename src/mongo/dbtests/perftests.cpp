@@ -20,6 +20,18 @@
  *
  *    You should have received a copy of the GNU Affero General Public License
  *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the GNU Affero General Public License in all respects
+ *    for all of the code used other than as permitted herein. If you modify
+ *    file(s) with this exception, you may extend this exception to your
+ *    version of the file(s), but you are not obligated to do so. If you do not
+ *    wish to do so, delete this exception statement from your version. If you
+ *    delete this exception statement from all source files in the program,
+ *    then also delete it in the license file.
  */
 
 #include "mongo/pch.h"
@@ -32,7 +44,7 @@
 #include "mongo/db/dur_stats.h"
 #include "mongo/db/instance.h"
 #include "mongo/db/json.h"
-#include "mongo/db/key.h"
+#include "mongo/db/structure/btree/key.h"
 #include "mongo/db/lasterror.h"
 #include "mongo/db/taskqueue.h"
 #include "mongo/dbtests/dbtests.h"
@@ -43,6 +55,7 @@
 #include "mongo/util/fail_point.h"
 #include "mongo/util/timer.h"
 #include "mongo/util/version.h"
+#include "mongo/util/version_reporting.h"
 
 #if (__cplusplus >= 201103L)
 #include <mutex>
@@ -1058,8 +1071,14 @@ namespace PerfTests {
     class InsertBig : public B {
         BSONObj x;
         virtual int howLongMillis() {
-            if( sizeof(void*) == 4 )
-                return 1000;  // could exceed mmapping if run too long, as this function adds a lot fasta
+            if (sizeof(void*) == 4) {
+                // See SERVER-12556 - Running this test for some time causes occasional failures
+                // on Windows 32-bit, because the virtual address space is used up and remapping 
+                // starts to fail. Value of zero means that only one iteration of the test
+                // will run.
+                //
+                return 0;
+            }
             return 5000;
         }
     public:

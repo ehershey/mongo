@@ -40,7 +40,9 @@
          have to handle falling behind which would use too much ram (going back into a read lock would suffice to stop that).
          for now (1.7.5/1.8.0) we are in read lock which is not ideal.
      WRITETODATAFILES
-       apply the writes back to the non-private MMF after they are for certain in redo log
+       actually write to the database data files in this phase.  currently done by memcpy'ing the writes back to 
+       the non-private MMF.  alternatively one could write to the files the traditional way; however the way our 
+       storage engine works that isn't any faster (actually measured a tiny bit slower).
      REMAPPRIVATEVIEW
        we could in a write lock quickly flip readers back to the main view, then stay in read lock and do our real
          remapping. with many files (e.g., 1000), remapping could be time consuming (several ms), so we don't want
@@ -50,21 +52,21 @@
 
    mutexes:
 
-     READLOCK dbMutex
+     READLOCK dbMutex (big 'R')
      LOCK groupCommitMutex
        PREPLOGBUFFER()
      READLOCK mmmutex
        commitJob.reset()
-     UNLOCK dbMutex                                     // now other threads can write
+     UNLOCK dbMutex                      // now other threads can write
        WRITETOJOURNAL()
        WRITETODATAFILES()
      UNLOCK mmmutex
      UNLOCK groupCommitMutex
 
-     on the next write lock acquisition for dbMutex:    // see MongoMutex::_acquiredWriteLock()
-       REMAPPRIVATEVIEW()
+   every Nth groupCommit, at the end, we REMAPPRIVATEVIEW() at the end of the work. because of
+   that we are in W lock for that groupCommit, which is nonideal of course.
 
-     @see https://docs.google.com/drawings/edit?id=1TklsmZzm7ohIZkwgeK6rMvsdaR13KjtJYMsfLr175Zc
+   @see https://docs.google.com/drawings/edit?id=1TklsmZzm7ohIZkwgeK6rMvsdaR13KjtJYMsfLr175Zc
 */
 
 #include "mongo/pch.h"
@@ -272,10 +274,16 @@ namespace mongo {
         bool NOINLINE_DECL DurableImpl::_aCommitIsNeeded() {
             switch (Lock::isLocked()) {
                 case '\0': {
-                    DEV log() << "commitIfNeeded but we are unlocked that is ok but why do we get here" << endl;
+                    // lock_w() can call in this state at times if a commit is needed before attempting 
+                    // its lock.
                     Lock::GlobalRead r;
                     if( commitJob.bytes() < UncommittedBytesLimit ) {
                         // someone else beat us to it
+                        //
+                        // note before of 'R' state, many threads can pile-in to this point and 
+                        // still fall through to below, and they will exit without doing work later
+                        // once inside groupCommitMutex.  this is all likely inefficient.  maybe 
+                        // groupCommitMutex should be on top.
                         return false;
                     }
                     commitNow();
@@ -690,6 +698,8 @@ namespace mongo {
             //
             DEV verify( !commitJob.hasWritten() );
             if( !Lock::isW() ) {
+                // todo: note we end up here i believe if our lock state is X -- and that might not be what we want.
+
                 // REMAPPRIVATEVIEW needs done in a write lock (as there is a short window during remapping when each view 
                 // might not exist) thus we do it later.
                 // 
@@ -716,11 +726,11 @@ namespace mongo {
             }
         }
 
-        /** locking: in read lock when called
-                     or, for early commits (commitIfNeeded), in write lock
+        /** locking: in at least 'R' when called
+                     or, for early commits (commitIfNeeded), in W or X
             @param lwg set if the durcommitthread *only* -- then we will upgrade the lock 
-                   to W so we can remapprivateview. only durcommitthread as more than one 
-                   thread upgrading would potentially deadlock
+                   to W so we can remapprivateview. only durcommitthread calls with 
+                   lgw != 0 as more than one thread upgrading would deadlock
             @see DurableMappedFile::close()
         */
         static void groupCommit(Lock::GlobalWrite *lgw) {

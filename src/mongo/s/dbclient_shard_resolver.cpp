@@ -28,7 +28,7 @@
 
 #include "mongo/s/dbclient_shard_resolver.h"
 
-#include "mongo/client/dbclient_rs.h"
+#include "mongo/client/replica_set_monitor.h"
 #include "mongo/s/config.h"
 #include "mongo/s/shard.h"
 
@@ -54,16 +54,23 @@ namespace mongo {
         // Internally uses our shard cache, does no reload
         Shard shard = Shard::findIfExists( shardName );
         if ( shard.getName() == "" ) {
-            return Status( ErrorCodes::ShardNotFound, "" );
+            return Status( ErrorCodes::ShardNotFound,
+                           string("unknown shard name ") + shardName );
         }
+        return findMaster(shard.getConnString(), shardHost);
+    }
 
-        ConnectionString rawShardHost = ConnectionString::parse( shard.getConnString(), errMsg );
+    Status DBClientShardResolver::findMaster( const std::string connString,
+                                              ConnectionString* resolvedHost ) {
+        std::string errMsg;
+
+        ConnectionString rawHost = ConnectionString::parse( connString, errMsg );
         dassert( errMsg == "" );
-        dassert( rawShardHost.type() == ConnectionString::SET
-                 || rawShardHost.type() == ConnectionString::MASTER );
+        dassert( rawHost.type() == ConnectionString::SET
+                 || rawHost.type() == ConnectionString::MASTER );
 
-        if ( rawShardHost.type() == ConnectionString::MASTER ) {
-            *shardHost = rawShardHost;
+        if ( rawHost.type() == ConnectionString::MASTER ) {
+            *resolvedHost = rawHost;
             return Status::OK();
         }
 
@@ -72,21 +79,24 @@ namespace mongo {
         //
 
         // Does not reload the monitor if it doesn't currently exist
-        ReplicaSetMonitorPtr replMonitor = ReplicaSetMonitor::get( rawShardHost.getSetName(),
+        ReplicaSetMonitorPtr replMonitor = ReplicaSetMonitor::get( rawHost.getSetName(),
                                                                    false );
         if ( !replMonitor ) {
-            return Status( ErrorCodes::ReplicaSetNotFound, "" );
+            return Status( ErrorCodes::ReplicaSetNotFound,
+                           string("unknown replica set ") + rawHost.getSetName() );
         }
 
         try {
             // This can throw when we don't find a master!
-            HostAndPort masterHostAndPort = replMonitor->getMaster();
-            *shardHost = ConnectionString::parse( masterHostAndPort.toString( true ), errMsg );
+            HostAndPort masterHostAndPort = replMonitor->getMasterOrUassert();
+            *resolvedHost = ConnectionString::parse( masterHostAndPort.toString( true ), errMsg );
             dassert( errMsg == "" );
             return Status::OK();
         }
-        catch ( const DBException& ex ) {
-            return Status( ErrorCodes::HostNotFound, "" );
+        catch ( const DBException& ) {
+            return Status( ErrorCodes::HostNotFound,
+                           string("could not contact primary for replica set ")
+                           + replMonitor->getName() );
         }
 
         // Unreachable

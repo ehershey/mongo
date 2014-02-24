@@ -18,7 +18,6 @@
 #include "mongo/pch.h"
 
 #include "mongo/db/d_concurrency.h"
-#include "mongo/db/memconcept.h"
 #include "mongo/db/storage/durable_mapped_file.h"
 #include "mongo/util/file_allocator.h"
 #include "mongo/util/mmap.h"
@@ -72,7 +71,7 @@ namespace mongo {
     }
 
     MemoryMappedFile::MemoryMappedFile()
-        : _flushMutex(new mutex("flushMutex")) {
+        : _flushMutex(new mutex("flushMutex")), _uniqueId(0) {
         fd = 0;
         maphandle = 0;
         len = 0;
@@ -82,7 +81,6 @@ namespace mongo {
     void MemoryMappedFile::close() {
         LockMongoFilesShared::assertExclusivelyLocked();
         for( vector<void*>::iterator i = views.begin(); i != views.end(); i++ ) {
-            memconcept::invalidate(*i);
             clearWritableBits(*i);
             UnmapViewOfFile(*i);
         }
@@ -111,13 +109,13 @@ namespace mongo {
         if ( 0 == readOnlyMapAddress ) {
             DWORD dosError = GetLastError();
             log() << "MapViewOfFileEx for " << filename()
+                    << " at address " << thisAddress
                     << " failed with error " << errnoWithDescription( dosError )
                     << " (file size is " << len << ")"
                     << " in MemoryMappedFile::createReadOnlyMap"
                     << endl;
             fassertFailed( 16165 );
         }
-        memconcept::is( readOnlyMapAddress, memconcept::concept::other, filename() );
         views.push_back( readOnlyMapAddress );
         return readOnlyMapAddress;
     }
@@ -202,6 +200,7 @@ namespace mongo {
             if ( view == 0 ) {
                 DWORD dosError = GetLastError();
                 log() << "MapViewOfFileEx for " << filename
+                        << " at address " << thisAddress
                         << " failed with " << errnoWithDescription( dosError )
                         << " (file size is " << length << ")"
                         << " in MemoryMappedFile::map"
@@ -211,7 +210,6 @@ namespace mongo {
             }
         }
         views.push_back(view);
-        memconcept::is(view, memconcept::concept::memorymappedfile, this->filename(), (unsigned) length);
         len = length;
         return view;
     }
@@ -290,7 +288,6 @@ namespace mongo {
         }
         clearWritableBits( privateMapAddress );
         views.push_back( privateMapAddress );
-        memconcept::is( privateMapAddress, memconcept::concept::memorymappedfile, filename() );
         return privateMapAddress;
     }
 
@@ -389,7 +386,9 @@ namespace mongo {
             success = FALSE != FlushFileBuffers(_fd);
             if (!success) {
                 int err = GetLastError();
-                out() << "FlushFileBuffers failed " << err << " file: " << _filename << endl;
+                out() << "FlushFileBuffers failed: " << errnoWithDescription( err )
+                      << " file: " << _filename << endl;
+                dataSyncFailedHandler();
             }
         }
 

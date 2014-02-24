@@ -4,7 +4,7 @@
 var doTest = function() {
 
 var rsOpts = { oplogSize: 10, verbose : 2, useHostname : false };
-var st = new ShardingTest({ keyFile : 'jstests/libs/key1', shards : 2, chunksize : 1, config : 3,
+var st = new ShardingTest({ keyFile : 'jstests/libs/key1', shards : 2, chunksize : 2, config : 3,
                             rs : rsOpts, other : { nopreallocj : 1, verbose : 2, useHostname : false }});
 
 var mongos = st.s;
@@ -24,14 +24,11 @@ var rwUser = 'rwUser';
 var roUser = 'roUser';
 var password = 'password';
 
-adminDB.createUser({user: rwUser, pwd: password, roles: jsTest.adminUserRoles},
-                   {w: st.rs0.numNodes, wtimeout: 30000} );
+adminDB.createUser({user: rwUser, pwd: password, roles: jsTest.adminUserRoles});
 
 assert( adminDB.auth( rwUser, password ) );
-testDB.createUser({user: rwUser, pwd: password, roles: jsTest.basicUserRoles},
-                  {w: st.rs0.numNodes, wtimeout: 30000} );
-testDB.createUser({user: roUser, pwd: password, roles: jsTest.readOnlyUserRoles},
-                  {w: st.rs0.numNodes, wtimeout: 30000} );
+testDB.createUser({user: rwUser, pwd: password, roles: jsTest.basicUserRoles});
+testDB.createUser({user: roUser, pwd: password, roles: jsTest.readOnlyUserRoles});
 
 authenticatedConn = new Mongo( mongos.host );
 authenticatedConn.getDB( 'admin' ).auth( rwUser, password );
@@ -117,6 +114,8 @@ var checkReadOps = function( hasReadAuth ) {
         print( "Checking read operations, should work" );
         assert.eq( 1000, testDB.foo.find().itcount() );
         assert.eq( 1000, testDB.foo.count() );
+        // NOTE: This is an explicit check that GLE can be run with read prefs, not the result of
+        // above.
         assert.eq( null, testDB.runCommand({getlasterror : 1}).err );
         checkCommandSucceeded( testDB, {dbstats : 1} );
         checkCommandSucceeded( testDB, {collstats : 'foo'} );

@@ -54,7 +54,10 @@ var ports = allocatePorts( 3 );
 var basePath = MongoRunner.dataPath + basename;
 var hostname = getHostName();
 
-var slave2 = startMongodTest (ports[2], basename, false, {replSet : basename, oplogSize : 2} )
+var slave2 = startMongodTest (ports[2],
+                              basename,
+                              false,
+                              Object.merge({replSet : basename, oplogSize : 2}, x509_options2));
 
 var local_s2 = slave2.getDB("local");
 var admin_s2 = slave2.getDB("admin");
@@ -129,6 +132,6 @@ print("13. Check hbmsg");
 master.getDB("admin").runCommand({replSetTest:1, sethbmsg:"foo bar baz"});
 var status = master.getDB("admin").runCommand({replSetGetStatus:1});
 printjson(status);
-assert.eq(status.members[0].errmsg, "foo bar baz");
+assert.eq(status.members[0].infoMessage, "foo bar baz");
 stopMongod(ports[2]);
 replTest.stopSet();

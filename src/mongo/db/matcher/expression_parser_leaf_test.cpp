@@ -49,6 +49,12 @@ namespace mongo {
         ASSERT( !result.getValue()->matchesBSON( BSON( "x" << 3 ) ) );
     }
 
+    TEST( MatchExpressionParserLeafTest, SimpleEQUndefined ) {
+        BSONObj query = BSON( "x" << BSON( "$eq" << BSONUndefined ) );
+        StatusWithMatchExpression result = MatchExpressionParser::parse( query );
+        ASSERT_FALSE( result.isOK() );
+    }
+
     TEST( MatchExpressionParserLeafTest, SimpleGT1 ) {
         BSONObj query = BSON( "x" << BSON( "$gt" << 2 ) );
         StatusWithMatchExpression result = MatchExpressionParser::parse( query );
@@ -254,6 +260,26 @@ namespace mongo {
                 BSON( "$ref" << "colly" << "$id" << oidy << "$db" << "db" ) ) ) ) );
     }
 
+    TEST( MatchExpressionParserLeafTest, INDBRefWithOptionalField1 ) {
+        OID oid = OID::gen();
+        BSONObj query =
+            BSON( "x" << BSON( "$in" << BSON_ARRAY(
+                BSON( "$ref" << "coll" << "$id" << oid << "foo" << 12345 ) ) ) );
+        StatusWithMatchExpression result = MatchExpressionParser::parse( query );
+        ASSERT_TRUE( result.isOK() );
+
+        OID oidx = OID::gen();
+        ASSERT( !result.getValue()->matchesBSON(
+            BSON( "x" << BSON( "$ref" << "coll" << "$id" << oidx << "$db" << "db" ) ) ) );
+        ASSERT( result.getValue()->matchesBSON(
+            BSON( "x" << BSON_ARRAY(
+                BSON( "$ref" << "coll" << "$id" << oid << "foo" << 12345 ) ) ) ) );
+        ASSERT( result.getValue()->matchesBSON(
+            BSON( "x" << BSON_ARRAY(
+                BSON( "$ref" << "collx" << "$id" << oidx << "foo" << 12345 ) <<
+                BSON( "$ref" << "coll" << "$id" << oid << "foo" << 12345 ) ) ) ) );
+    }
+
     TEST( MatchExpressionParserLeafTest, INInvalidDBRefs ) {
         // missing $id
         BSONObj query = BSON( "x" << BSON( "$in" << BSON_ARRAY(
@@ -268,23 +294,22 @@ namespace mongo {
         result = MatchExpressionParser::parse( query );
         ASSERT_FALSE( result.isOK() );
 
-        // optional third field is not $db
         OID oid = OID::gen();
+
+        // missing $ref field
         query = BSON( "x" << BSON( "$in" << BSON_ARRAY(
-                    BSON( "$ref" << "coll" <<
-                          "$id" << oid <<
-                          "$foo" << 1 ) ) ) );
+                    BSON( "$id" << oid <<
+                          "foo" << 3 ) ) ) );
         result = MatchExpressionParser::parse( query );
         ASSERT_FALSE( result.isOK() );
 
-        // fourth field should result in invalid DBRef
+        // missing $id and $ref field
         query = BSON( "x" << BSON( "$in" << BSON_ARRAY(
-                    BSON( "$ref" << "coll" <<
-                          "$id" << oid <<
-                          "$db" << "db" <<
-                          "$foo" << 1 ) ) ) );
+                    BSON( "$db" << "test" <<
+                          "foo" << 3 ) ) ) );
         result = MatchExpressionParser::parse( query );
         ASSERT_FALSE( result.isOK() );
+
     }
 
     TEST( MatchExpressionParserLeafTest, INExpressionDocument ) {
@@ -295,6 +320,12 @@ namespace mongo {
 
     TEST( MatchExpressionParserLeafTest, INNotArray ) {
         BSONObj query = BSON( "x" << BSON( "$in" << 5 ) );
+        StatusWithMatchExpression result = MatchExpressionParser::parse( query );
+        ASSERT_FALSE( result.isOK() );
+    }
+
+    TEST( MatchExpressionParserLeafTest, INUndefined ) {
+        BSONObj query = BSON( "x" << BSON( "$in" << BSON_ARRAY( BSONUndefined ) ) );
         StatusWithMatchExpression result = MatchExpressionParser::parse( query );
         ASSERT_FALSE( result.isOK() );
     }

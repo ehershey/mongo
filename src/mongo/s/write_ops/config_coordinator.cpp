@@ -224,7 +224,6 @@ namespace mongo {
 
     static void buildErrorFrom( const Status& status, BatchedCommandResponse* response ) {
         response->setOk( false );
-        response->setN( 0 );
         response->setErrCode( static_cast<int>( status.code() ) );
         response->setErrMessage( status.reason() );
 
@@ -240,22 +239,14 @@ namespace mongo {
     static bool areResponsesEqual( const BatchedCommandResponse& responseA,
                                    const BatchedCommandResponse& responseB ) {
 
+        // Note: This needs to also take into account comparing responses from legacy writes
+        // and write commands.
+
         // TODO: Better reporting of why not equal
         if ( responseA.getOk() != responseB.getOk() )
             return false;
         if ( responseA.getN() != responseB.getN() )
             return false;
-        if ( responseA.isSingleUpsertedSet() != responseB.isSingleUpsertedSet() )
-            return false;
-        if ( responseA.isUpsertDetailsSet() != responseB.isUpsertDetailsSet() )
-            return false;
-
-        if ( responseA.isSingleUpsertedSet() ) {
-            BSONObj upsertA = responseA.getSingleUpserted();
-            BSONObj upsertB = responseB.getSingleUpserted();
-            if ( upsertA.woCompare( upsertB ) != 0 )
-                return false;
-        }
 
         if ( responseA.isUpsertDetailsSet() ) {
             // TODO:
@@ -298,17 +289,7 @@ namespace mongo {
         }
 
         clientResponse->setOk( false );
-        clientResponse->setN( 0 );
         clientResponse->setErrCode( ErrorCodes::ManualInterventionRequired );
-
-        BSONObjBuilder errInfoB;
-        for ( vector<ConfigResponse*>::const_iterator it = responses.begin(); it != responses.end();
-            ++it ) {
-            ConfigResponse* response = *it;
-            errInfoB.append( response->configHost.toString(), response->response.toBSON() );
-        }
-
-        clientResponse->setErrInfo( errInfoB.obj() );
         clientResponse->setErrMessage( "config write was not consistent, "
                                        "manual intervention may be required" );
 
@@ -318,20 +299,7 @@ namespace mongo {
                                     BatchedCommandResponse* clientResponse ) {
 
         clientResponse->setOk( false );
-        clientResponse->setN( 0 );
         clientResponse->setErrCode( ErrorCodes::RemoteValidationError );
-
-        BSONObjBuilder errInfoB;
-        for ( vector<ConfigFsyncResponse*>::const_iterator it = responses.begin();
-            it != responses.end(); ++it ) {
-            ConfigFsyncResponse* fsyncResponse = *it;
-            if ( fsyncResponse->response.getOk() )
-                continue;
-            errInfoB.append( fsyncResponse->configHost.toString(),
-                             fsyncResponse->response.toBSON() );
-        }
-
-        clientResponse->setErrInfo( errInfoB.obj() );
         clientResponse->setErrMessage( "could not verify config servers were "
                                        "active and reachable before write" );
     }

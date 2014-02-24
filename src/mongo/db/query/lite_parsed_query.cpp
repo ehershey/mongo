@@ -26,6 +26,12 @@ namespace mongo {
     const string LiteParsedQuery::cmdOptionMaxTimeMS("maxTimeMS");
     const string LiteParsedQuery::queryOptionMaxTimeMS("$maxTimeMS");
 
+    const string LiteParsedQuery::metaTextScore("textScore");
+    const string LiteParsedQuery::metaGeoNearDistance("geoNearDistance");
+    const string LiteParsedQuery::metaGeoNearPoint("geoNearPoint");
+    const string LiteParsedQuery::metaDiskLoc("diskloc");
+    const string LiteParsedQuery::metaIndexKey("indexKey");
+
     // static
     Status LiteParsedQuery::make(const QueryMessage& qm, LiteParsedQuery** out) {
         auto_ptr<LiteParsedQuery> pq(new LiteParsedQuery());
@@ -40,10 +46,15 @@ namespace mongo {
     Status LiteParsedQuery::make(const string& ns, int ntoskip, int ntoreturn, int queryOptions,
                                  const BSONObj& query, const BSONObj& proj, const BSONObj& sort,
                                  const BSONObj& hint,
+                                 const BSONObj& minObj, const BSONObj& maxObj,
+                                 bool snapshot,
                                  LiteParsedQuery** out) {
         auto_ptr<LiteParsedQuery> pq(new LiteParsedQuery());
         pq->_sort = sort;
         pq->_hint = hint;
+        pq->_min = minObj;
+        pq->_max = maxObj;
+        pq->_snapshot = snapshot;
 
         Status status = pq->init(ns, ntoskip, ntoreturn, queryOptions, query, proj, false);
         if (status.isOK()) { *out = pq.release(); }
@@ -87,8 +98,8 @@ namespace mongo {
     }
 
     // static
-    bool LiteParsedQuery::isTextMeta(BSONElement elt) {
-        // elt must be foo: {$meta: "text"}
+    bool LiteParsedQuery::isTextScoreMeta(BSONElement elt) {
+        // elt must be foo: {$meta: "textScore"}
         if (mongo::Object != elt.type()) {
             return false;
         }
@@ -105,7 +116,7 @@ namespace mongo {
         if (mongo::String != metaElt.type()) {
             return false;
         }
-        if (!mongoutils::str::equals("text", metaElt.valuestr())) {
+        if (LiteParsedQuery::metaTextScore != metaElt.valuestr()) {
             return false;
         }
         // must have exactly 1 element
@@ -134,7 +145,7 @@ namespace mongo {
         if (mongo::String != metaElt.type()) {
             return false;
         }
-        if (!mongoutils::str::equals("diskloc", metaElt.valuestr())) {
+        if (LiteParsedQuery::metaDiskLoc != metaElt.valuestr()) {
             return false;
         }
         // must have exactly 1 element
@@ -149,7 +160,7 @@ namespace mongo {
         BSONObjIterator i(sortObj);
         while (i.more()) {
             BSONElement e = i.next();
-            if (isTextMeta(e)) {
+            if (isTextScoreMeta(e)) {
                 continue;
             }
             long long n = e.safeNumberLong();
@@ -166,7 +177,7 @@ namespace mongo {
         BSONObjIterator i(sortObj);
         while (i.more()) {
             BSONElement e = i.next();
-            if (isTextMeta(e)) {
+            if (isTextScoreMeta(e)) {
                 b.append(e);
                 continue;
             }
@@ -221,10 +232,45 @@ namespace mongo {
 
         _hasReadPref = queryObj.hasField("$readPreference");
 
-        if (!isValidSortOrder(_sort)) {
-            return Status(ErrorCodes::BadValue, "bad sort specification");
+        if (!_sort.isEmpty()) {
+            if (!isValidSortOrder(_sort)) {
+                return Status(ErrorCodes::BadValue, "bad sort specification");
+            }
+            _sort = normalizeSortOrder(_sort);
         }
-        _sort = normalizeSortOrder(_sort);
+
+        // Min and Max objects must have the same fields.
+        if (!_min.isEmpty() && !_max.isEmpty()) {
+            if (!_min.isFieldNamePrefixOf(_max) || (_min.nFields() != _max.nFields())) {
+                return Status(ErrorCodes::BadValue, "min and max must have the same field names");
+            }
+        }
+
+        // Can't combine a normal sort and a $meta projection on the same field.
+        BSONObjIterator projIt(_proj);
+        while (projIt.more()) {
+            BSONElement projElt = projIt.next();
+            if (isTextScoreMeta(projElt)) {
+                BSONElement sortElt = _sort[projElt.fieldName()];
+                if (!sortElt.eoo() && !isTextScoreMeta(sortElt)) {
+                    return Status(ErrorCodes::BadValue,
+                                  "can't have a non-$meta sort on a $meta projection");
+                }
+            }
+        }
+
+        // All fields with a $meta sort must have a corresponding $meta projection.
+        BSONObjIterator sortIt(_sort);
+        while (sortIt.more()) {
+            BSONElement sortElt = sortIt.next();
+            if (isTextScoreMeta(sortElt)) {
+                BSONElement projElt = _proj[sortElt.fieldName()];
+                if (projElt.eoo() || !isTextScoreMeta(projElt)) {
+                    return Status(ErrorCodes::BadValue,
+                                  "must have $meta projection for all $meta sort keys");
+                }
+            }
+        }
 
         return Status::OK();
     }
@@ -309,7 +355,16 @@ namespace mongo {
                 }
                 else if (str::equals("returnKey", name)) {
                     // Won't throw.
-                    _returnKey = e.trueValue();
+                    if (e.trueValue()) {
+                        _returnKey = true;
+                        BSONObjBuilder projBob;
+                        projBob.appendElements(_proj);
+                        // XXX: what's the syntax here?
+                        BSONObj indexKey = BSON("$$" <<
+                                                BSON("$meta" << LiteParsedQuery::metaIndexKey));
+                        projBob.append(indexKey.firstElement());
+                        _proj = projBob.obj();
+                    }
                 }
                 else if (str::equals("maxScan", name)) {
                     // Won't throw.
@@ -320,7 +375,8 @@ namespace mongo {
                     if (e.trueValue()) {
                         BSONObjBuilder projBob;
                         projBob.appendElements(_proj);
-                        BSONObj metaDiskLoc = BSON("$diskLoc" << BSON("$meta" << "diskloc"));
+                        BSONObj metaDiskLoc = BSON("$diskLoc" <<
+                                                   BSON("$meta" << LiteParsedQuery::metaDiskLoc));
                         projBob.append(metaDiskLoc.firstElement());
                         _proj = projBob.obj();
                     }

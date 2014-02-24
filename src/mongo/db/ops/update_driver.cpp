@@ -48,11 +48,13 @@ namespace mongo {
 
     UpdateDriver::UpdateDriver(const Options& opts)
         : _replacementMode(false)
+        , _indexedFields(NULL)
         , _multi(opts.multi)
         , _upsert(opts.upsert)
         , _logOp(opts.logOp)
         , _modOptions(opts.modOptions)
-        , _affectIndices(false) {
+        , _affectIndices(false)
+        , _positional(false) {
     }
 
     UpdateDriver::~UpdateDriver() {
@@ -148,10 +150,15 @@ namespace mongo {
         auto_ptr<ModifierInterface> mod(modifiertable::makeUpdateMod(type));
         dassert(mod.get());
 
-        Status status = mod->init(elem, _modOptions);
+        bool positional = false;
+        Status status = mod->init(elem, _modOptions, &positional);
         if (!status.isOK()) {
             return status;
         }
+
+        // If any modifier indicates that it requires a positional match, toggle the
+        // _positional flag to true.
+        _positional = _positional || positional;
 
         _mods.push_back(mod.release());
 
@@ -343,7 +350,8 @@ namespace mongo {
                 // TODO: make mightBeIndexed and fieldRef like each other.
                 if (!_affectIndices &&
                     !execInfo.noOp &&
-                    _indexedFields.mightBeIndexed(execInfo.fieldRef[i]->dottedField())) {
+                    _indexedFields &&
+                    _indexedFields->mightBeIndexed(execInfo.fieldRef[i]->dottedField())) {
                     _affectIndices = true;
                     doc->disableInPlaceUpdates();
                 }
@@ -384,7 +392,7 @@ namespace mongo {
         return _affectIndices;
     }
 
-    void UpdateDriver::refreshIndexKeys(const IndexPathSet& indexedFields) {
+    void UpdateDriver::refreshIndexKeys(const IndexPathSet* indexedFields) {
         _indexedFields = indexedFields;
     }
 
@@ -451,8 +459,9 @@ namespace mongo {
         for (vector<ModifierInterface*>::iterator it = _mods.begin(); it != _mods.end(); ++it) {
             delete *it;
         }
-        _indexedFields.clear();
+        _indexedFields = NULL;
         _replacementMode = false;
+        _positional = false;
     }
 
 } // namespace mongo

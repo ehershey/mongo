@@ -14,16 +14,28 @@
  *
  *    You should have received a copy of the GNU Affero General Public License
  *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the GNU Affero General Public License in all respects
+ *    for all of the code used other than as permitted herein. If you modify
+ *    file(s) with this exception, you may extend this exception to your
+ *    version of the file(s), but you are not obligated to do so. If you do not
+ *    wish to do so, delete this exception statement from your version. If you
+ *    delete this exception statement from all source files in the program,
+ *    then also delete it in the license file.
  */
 
-#include "mongo/db/btree.h"
-#include "mongo/db/btreecursor.h"
+#include "mongo/db/structure/btree/btree.h"
 #include "mongo/db/catalog/index_catalog.h"
 #include "mongo/db/dbhelpers.h"
-#include "mongo/db/index/btree_based_builder.h"
+#include "mongo/db/index/btree_based_access_method.h"
+#include "mongo/db/index/index_descriptor.h"
 #include "mongo/db/kill_current_op.h"
 #include "mongo/db/sort_phase_one.h"
-#include "mongo/db/structure/collection.h"
+#include "mongo/db/catalog/collection.h"
 #include "mongo/db/structure/collection_iterator.h"
 #include "mongo/platform/cstdint.h"
 
@@ -33,7 +45,7 @@ namespace IndexUpdateTests {
 
     static const char* const _ns = "unittests.indexupdate";
     DBDirectClient _client;
-    ExternalSortComparison* _aFirstSort = BtreeBasedBuilder::getComparison(0, BSON("a" << 1));
+    ExternalSortComparison* _aFirstSort = BtreeBasedAccessMethod::getComparison(0, BSON("a" << 1));
 
     /**
      * Test fixture for a write locked test using collection _ns.  Includes functionality to
@@ -54,6 +66,8 @@ namespace IndexUpdateTests {
             return _ctx.ctx().db()->getCollection( _ns );
         }
     protected:
+    // QUERY_MIGRATION
+#if 0
         /** @return IndexDetails for a new index on a:1, with the info field populated. */
         IndexDescriptor* addIndexWithInfo() {
             BSONObj indexInfo = BSON( "v" << 1 <<
@@ -76,11 +90,13 @@ namespace IndexUpdateTests {
 
             return collection()->getIndexCatalog()->findIndexByName( "a_1" );
         }
-
+#endif
         Client::WriteContext _ctx;
     };
 
     /** addKeysToPhaseOne() adds keys from a collection's documents to an external sorter. */
+    // QUERY_MIGRATION
+#if 0
     class AddKeysToPhaseOne : public IndexBuildBase {
     public:
         void run() {
@@ -158,7 +174,10 @@ namespace IndexUpdateTests {
     private:
         bool _mayInterrupt;
     };
+#endif
 
+    // QUERY_MIGRATION
+#if 0
     /** buildBottomUpPhases2And3() builds a btree from the keys in an external sorter. */
     class BuildBottomUp : public IndexBuildBase {
     public:
@@ -215,7 +234,10 @@ namespace IndexUpdateTests {
             ASSERT_EQUALS( nKeys, expectedKey );
         }
     };
+#endif
 
+    // QUERY_MIGRATION
+#if 0
     /** buildBottomUpPhases2And3() aborts if the current operation is interrupted. */
     class InterruptBuildBottomUp : public IndexBuildBase {
     public:
@@ -286,91 +308,7 @@ namespace IndexUpdateTests {
     private:
         bool _mayInterrupt;
     };
-
-    /** doDropDups() deletes the duplicate documents in the provided set. */
-    class DoDropDups : public IndexBuildBase {
-    public:
-        void run() {
-            // Insert some documents.
-            int32_t nDocs = 1000;
-            for( int32_t i = 0; i < nDocs; ++i ) {
-                _client.insert( _ns, BSON( "a" << ( i / 4 ) ) );
-            }
-
-            // Find the documents that are dups.
-            set<DiskLoc> dups;
-            int32_t last = -1;
-            CollectionIterator* it = collection()->getIterator( DiskLoc(), false,
-                                                                CollectionScanParams::FORWARD );
-            while ( !it->isEOF() ) {
-                DiskLoc currLoc = it->getNext();
-                int32_t currA = currLoc.obj()[ "a" ].Int();
-                if ( currA == last ) {
-                    dups.insert( currLoc );
-                }
-                last = currA;
-            }
-            delete it;
-
-            // Check the expected number of dups.
-            ASSERT_EQUALS( static_cast<uint32_t>( nDocs / 4 * 3 ), dups.size() );
-            // Drop the dups.
-            BtreeBasedBuilder::doDropDups( collection(), dups, true );
-            // Check that the expected number of documents remain.
-            ASSERT_EQUALS( static_cast<uint32_t>( nDocs / 4 ), _client.count( _ns ) );
-        }
-    };
-
-    /** doDropDups() aborts if the current operation is interrupted. */
-    class InterruptDoDropDups : public IndexBuildBase {
-    public:
-        InterruptDoDropDups( bool mayInterrupt ) :
-            _mayInterrupt( mayInterrupt ) {
-        }
-        void run() {
-            // Insert some documents.
-            int32_t nDocs = 1000;
-            for( int32_t i = 0; i < nDocs; ++i ) {
-                _client.insert( _ns, BSON( "a" << ( i / 4 ) ) );
-            }
-
-            // Find the documents that are dups.
-            set<DiskLoc> dups;
-            int32_t last = -1;
-            CollectionIterator* it = collection()->getIterator( DiskLoc(), false,
-                                                                CollectionScanParams::FORWARD );
-            while ( !it->isEOF() ) {
-                DiskLoc currLoc = it->getNext();
-                int32_t currA = currLoc.obj()[ "a" ].Int();
-                if ( currA == last ) {
-                    dups.insert( currLoc );
-                }
-                last = currA;
-            }
-            delete it;
-
-            // Check the expected number of dups.  There must be enough to trigger a RARELY
-            // condition when deleting them.
-            ASSERT_EQUALS( static_cast<uint32_t>( nDocs / 4 * 3 ), dups.size() );
-            // Kill the current operation.
-            cc().curop()->kill();
-            if ( _mayInterrupt ) {
-                // doDropDups() aborts.
-                ASSERT_THROWS( BtreeBasedBuilder::doDropDups( collection(), dups, _mayInterrupt ),
-                               UserException );
-                // Not all dups are dropped.
-                ASSERT( static_cast<uint32_t>( nDocs / 4 ) < _client.count( _ns ) );
-            }
-            else {
-                // doDropDups() succeeds.
-                BtreeBasedBuilder::doDropDups( collection(), dups, _mayInterrupt );
-                // The expected number of documents were dropped.
-                ASSERT_EQUALS( static_cast<uint32_t>( nDocs / 4 ), _client.count( _ns ) );
-            }
-        }
-    private:
-        bool _mayInterrupt;
-    };
+#endif
 
     /** Index creation is killed if mayInterrupt is true. */
     class InsertBuildIndexInterrupt : public IndexBuildBase {
@@ -531,7 +469,8 @@ namespace IndexUpdateTests {
                                           BSON( "ns" << _ns << "name" << "a_1" ) ) );
         }
     };
-
+    // QUERY_MIGRATION
+#if 0
     class IndexBuildInProgressTest : public IndexBuildBase {
     public:
         void run() {
@@ -585,6 +524,7 @@ namespace IndexUpdateTests {
             return new IndexCatalog::IndexBuildBlock( _ctx.ctx().db()->getCollection( _ns )->getIndexCatalog(), name, infoLoc );
         }
     };
+#endif
 
     /**
      * Fixture class that has a basic compound index.
@@ -756,22 +696,20 @@ namespace IndexUpdateTests {
         }
 
         void setupTests() {
-            add<AddKeysToPhaseOne>();
-            add<InterruptAddKeysToPhaseOne>( false );
-            add<InterruptAddKeysToPhaseOne>( true );
-            add<BuildBottomUp>();
-            add<InterruptBuildBottomUp>( false );
-            add<InterruptBuildBottomUp>( true );
-            add<DoDropDups>();
-            add<InterruptDoDropDups>( false );
-            add<InterruptDoDropDups>( true );
+            //add<AddKeysToPhaseOne>();
+            //add<InterruptAddKeysToPhaseOne>( false );
+            //add<InterruptAddKeysToPhaseOne>( true );
+            // QUERY_MIGRATION
+            //add<BuildBottomUp>();
+            //add<InterruptBuildBottomUp>( false );
+            //add<InterruptBuildBottomUp>( true );
             add<InsertBuildIndexInterrupt>();
             add<InsertBuildIndexInterruptDisallowed>();
             add<InsertBuildIdIndexInterrupt>();
             add<InsertBuildIdIndexInterruptDisallowed>();
             add<DirectClientEnsureIndexInterruptDisallowed>();
             add<HelpersEnsureIndexInterruptDisallowed>();
-            add<IndexBuildInProgressTest>();
+            //add<IndexBuildInProgressTest>();
             add<SameSpecDifferentOption>();
             add<SameSpecSameOptions>();
             add<DifferentSpecSameName>();

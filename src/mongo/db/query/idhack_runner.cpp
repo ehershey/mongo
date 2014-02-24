@@ -28,23 +28,35 @@
 
 #include "mongo/db/query/idhack_runner.h"
 
-#include "mongo/db/btree.h"
+#include "mongo/db/structure/btree/btree.h"
 #include "mongo/db/catalog/index_catalog.h"
 #include "mongo/db/diskloc.h"
 #include "mongo/db/exec/projection_exec.h"
+#include "mongo/db/index/btree_access_method.h"
 #include "mongo/db/index/index_descriptor.h"
 #include "mongo/db/jsobj.h"
+#include "mongo/db/pdfile.h"
 #include "mongo/db/query/canonical_query.h"
 #include "mongo/db/query/type_explain.h"
 #include "mongo/db/query/plan_executor.h"
-#include "mongo/db/structure/collection.h"
+#include "mongo/db/catalog/collection.h"
 #include "mongo/s/d_logic.h"
 
 namespace mongo {
 
-    IDHackRunner::IDHackRunner(Collection* collection, CanonicalQuery* query)
+    IDHackRunner::IDHackRunner(const Collection* collection, CanonicalQuery* query)
         : _collection(collection),
+          _key(query->getQueryObj()["_id"].wrap()),
           _query(query),
+          _killed(false),
+          _done(false),
+          _nscanned(0),
+          _nscannedObjects(0) { }
+
+    IDHackRunner::IDHackRunner(Collection* collection, const BSONObj& key)
+        : _collection(collection),
+          _key(key),
+          _query(NULL),
           _killed(false),
           _done(false) { }
 
@@ -55,7 +67,7 @@ namespace mongo {
         if (_done) { return Runner::RUNNER_EOF; }
 
         // Use the index catalog to get the id index.
-        IndexCatalog* catalog = _collection->getIndexCatalog();
+        const IndexCatalog* catalog = _collection->getIndexCatalog();
 
         // Find the index we use.
         IndexDescriptor* idDesc = catalog->findIdIndex();
@@ -64,17 +76,12 @@ namespace mongo {
             return Runner::RUNNER_EOF;
         }
 
-        // Create the key that we need to perform a lookup.
-        IndexDetails& id = idDesc->getOnDisk();
-        BSONObj key = id.getKeyFromQuery(_query->getQueryObj());
+        // This may not be valid always.  See SERVER-12397.
+        const BtreeBasedAccessMethod* accessMethod =
+            static_cast<const BtreeBasedAccessMethod*>(catalog->getIndex(idDesc));
 
         // Look up the key by going directly to the Btree.
-        DiskLoc loc;
-        if (0 == id.version()) {
-            loc = id.head.btree<V0>()->findSingle(id, id.head, key);
-        } else {
-            loc = id.head.btree<V1>()->findSingle(id, id.head, key);
-        }
+        DiskLoc loc = accessMethod->findSingle( _key );
 
         _done = true;
 
@@ -83,9 +90,13 @@ namespace mongo {
             return Runner::RUNNER_EOF;
         }
 
+        _nscanned++;
+
         // Set out parameters and note that we're done w/lookup.
         if (NULL != objOut) {
             Record* record = loc.rec();
+
+            _nscannedObjects++;
 
             // If the record isn't in memory...
             if (!Record::likelyInPhysicalMemory(record->dataNoThrowing())) {
@@ -108,8 +119,8 @@ namespace mongo {
             *objOut = loc.obj();
 
             // If we're sharded make sure the key belongs to us.  We need the object to do this.
-            if (shardingState.needCollectionMetadata(_query->ns())) {
-                CollectionMetadataPtr m = shardingState.getCollectionMetadata(_query->ns());
+            if (shardingState.needCollectionMetadata(_collection->ns().ns())) {
+                CollectionMetadataPtr m = shardingState.getCollectionMetadata(_collection->ns().ns());
                 if (m) {
                     KeyPattern kp(m->getKeyPattern());
                     if (!m->keyBelongsToMe( kp.extractSingleKey(*objOut))) {
@@ -120,7 +131,7 @@ namespace mongo {
             }
 
             // If there is a projection...
-            if (NULL != _query->getProj()) {
+            if (_query && _query->getProj()) {
                 // Create something to execute it.
                 auto_ptr<ProjectionExec> projExec(new ProjectionExec(_query->getParsed().getProj(),
                                                                      _query->root()));
@@ -150,25 +161,39 @@ namespace mongo {
     }
 
     // Nothing to do here, holding no state.
-    void IDHackRunner::invalidate(const DiskLoc& dl) {
+    void IDHackRunner::invalidate(const DiskLoc& dl, InvalidationType type) {
         if (_done || _killed) { return; }
-        if (_locFetching == dl) {
+        if (_locFetching == dl && (type == INVALIDATION_DELETION)) {
             _locFetching = DiskLoc();
             _killed = true;
         }
     }
 
     const std::string& IDHackRunner::ns() {
-        return _query->getParsed().ns();
+        return _collection->ns().ns();
     }
 
     void IDHackRunner::kill() {
         _killed = true;
+        _collection = NULL;
     }
 
-    Status IDHackRunner::getExplainPlan(TypeExplain** explain) const {
-        // This shouldn't be called anyway as idhack is only used when there is no explain.
-        return Status(ErrorCodes::InternalError, "no stats available to explain plan");
+    Status IDHackRunner::getInfo(TypeExplain** explain,
+                                 PlanInfo** planInfo) const {
+        // The explain plan simply indicates that the plan is idhack.
+        if (NULL != explain) {
+            *explain = new TypeExplain();
+            (*explain)->setIDHack(true);
+            (*explain)->setN(_nscanned);
+            (*explain)->setNScanned(_nscanned);
+            (*explain)->setNScannedObjects(_nscannedObjects);
+        }
+        else if (NULL != planInfo) {
+            *planInfo = new PlanInfo();
+            (*planInfo)->planSummary = "IDHACK";
+        }
+
+        return Status::OK();
     }
 
 } // namespace mongo

@@ -13,6 +13,18 @@
  *
  *    You should have received a copy of the GNU Affero General Public License
  *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the GNU Affero General Public License in all respects
+ *    for all of the code used other than as permitted herein. If you modify
+ *    file(s) with this exception, you may extend this exception to your
+ *    version of the file(s), but you are not obligated to do so. If you do not
+ *    wish to do so, delete this exception statement from your version. If you
+ *    delete this exception statement from all source files in the program,
+ *    then also delete it in the license file.
  */
 
 #include "mongo/scripting/engine_v8.h"
@@ -1430,10 +1442,21 @@ namespace mongo {
             argv[1] = v8::String::New(ss.str().c_str());
             return BinDataFT()->GetFunction()->NewInstance(2, argv);
         }
-        case mongo::Timestamp:
+        case mongo::Timestamp: {
+            v8::TryCatch tryCatch;
+
             argv[0] = v8::Number::New(elem.timestampTime() / 1000);
             argv[1] = v8::Number::New(elem.timestampInc());
-            return TimestampFT()->GetFunction()->NewInstance(2,argv);
+
+            v8::Handle<v8::Value> ret = TimestampFT()->GetFunction()->NewInstance(2,argv);
+            uassert(17355, str::stream() << "Error converting " << elem.toString(false)
+                                         << " in field " << elem.fieldName()
+                                         << " to a JS Timestamp object: "
+                                         << toSTLString(tryCatch.Exception()),
+                    !tryCatch.HasCaught());
+
+            return ret;
+        }
         case mongo::NumberLong:
             nativeUnsignedLong = elem.numberLong();
             // values above 2^53 are not accurately represented in JS

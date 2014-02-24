@@ -39,6 +39,7 @@
 #include "mongo/db/instance.h"
 #include "mongo/db/jsobj.h"
 #include "mongo/db/kill_current_op.h"
+#include "mongo/db/pdfile.h"
 #include "mongo/db/query/get_runner.h"
 #include "mongo/db/query/query_planner_common.h"
 #include "mongo/db/query/type_explain.h"
@@ -88,11 +89,9 @@ namespace mongo {
             long long nscannedObjects = 0; // full objects looked at
             long long n = 0; // matches
 
-            NamespaceDetails * d = nsdetails( ns );
+            Collection* collection = cc().database()->getCollection( ns );
 
-            string cursorName;
-
-            if (!d) {
+            if (!collection) {
                 result.appendArray( "values" , BSONObj() );
                 result.append("stats", BSON("n" << 0 <<
                                             "nscanned" << 0 <<
@@ -100,28 +99,25 @@ namespace mongo {
                 return true;
             }
 
-            CanonicalQuery* cq;
-            // XXX: project out just the field we're distinct-ing.  May be covered...
-            if (!CanonicalQuery::canonicalize(ns, query, &cq).isOK()) {
-                uasserted(17215, "Can't canonicalize query " + query.toString());
-                return 0;
-            }
-
             Runner* rawRunner;
-            if (!getRunner(cq, &rawRunner).isOK()) {
+            if (!getRunnerDistinct(collection, query, key, &rawRunner).isOK()) {
                 uasserted(17216, "Can't get runner for query " + query.toString());
                 return 0;
             }
 
             auto_ptr<Runner> runner(rawRunner);
-            auto_ptr<DeregisterEvenIfUnderlyingCodeThrows> safety;
-            ClientCursor::registerRunner(runner.get());
+            const ScopedRunnerRegistration safety(runner.get());
             runner->setYieldPolicy(Runner::YIELD_AUTO);
-            safety.reset(new DeregisterEvenIfUnderlyingCodeThrows(runner.get()));
 
+            string cursorName;
             BSONObj obj;
             Runner::RunnerState state;
             while (Runner::RUNNER_ADVANCED == (state = runner->getNext(&obj, NULL))) {
+                // Distinct expands arrays.
+                //
+                // If our query is covered, each value of the key should be in the index key and
+                // available to us without this.  If a collection scan is providing the data, we may
+                // have to expand an array.
                 BSONElementSet elts;
                 obj.getFieldsDotted(key, elts);
 
@@ -139,7 +135,7 @@ namespace mongo {
                 }
             }
             TypeExplain* bareExplain;
-            Status res = runner->getExplainPlan(&bareExplain);
+            Status res = runner->getInfo(&bareExplain, NULL);
             if (res.isOK()) {
                 auto_ptr<TypeExplain> explain(bareExplain);
                 if (explain->isCursorSet()) {

@@ -28,17 +28,22 @@
 
 #include "mongo/db/query/parsed_projection.h"
 
+#include "mongo/db/query/lite_parsed_query.h"
+
 namespace mongo {
 
     /**
      * Parses the projection 'spec' and checks its validity with respect to the query 'query'.
      * Puts covering information into 'out'.
      *
+     * Does not take ownership of 'query'.
+     *
      * Returns Status::OK() if it's a valid spec.
      * Returns a Status indicating how it's invalid otherwise.
      */
     // static
-    Status ParsedProjection::make(const BSONObj& spec, const BSONObj& query, ParsedProjection** out) {
+    Status ParsedProjection::make(const BSONObj& spec, const MatchExpression* const query,
+                                  ParsedProjection** out) {
         // Are we including or excluding fields?  Values:
         // -1 when we haven't initialized it.
         // 1 when we're including
@@ -51,6 +56,11 @@ namespace mongo {
         bool hasDottedField = false;
 
         bool includeID = true;
+
+        bool hasIndexKeyProjection = false;
+
+        bool wantGeoNearPoint = false;
+        bool wantGeoNearDistance = false;
 
         // Until we see a positional or elemMatch operator we're normal.
         ArrayOpType arrayOpType = ARRAY_OP_NORMAL;
@@ -130,15 +140,29 @@ namespace mongo {
                     }
 
                     // Make sure the argument to $meta is something we recognize.
-                    // e.g. {x: {$meta: "text"}}
+                    // e.g. {x: {$meta: "textScore"}}
                     if (String != e2.type()) {
                         return Status(ErrorCodes::BadValue, "unexpected argument to $meta in proj");
                     }
 
-                    if (!mongoutils::str::equals(e2.valuestr(), "text")
-                        && !mongoutils::str::equals(e2.valuestr(), "diskloc")) {
+                    if (e2.valuestr() != LiteParsedQuery::metaTextScore
+                        && e2.valuestr() != LiteParsedQuery::metaDiskLoc
+                        && e2.valuestr() != LiteParsedQuery::metaIndexKey
+                        && e2.valuestr() != LiteParsedQuery::metaGeoNearDistance
+                        && e2.valuestr() != LiteParsedQuery::metaGeoNearPoint) {
                         return Status(ErrorCodes::BadValue,
                                       "unsupported $meta operator: " + e2.str());
+                    }
+
+                    // This clobbers everything else.
+                    if (e2.valuestr() == LiteParsedQuery::metaIndexKey) {
+                        hasIndexKeyProjection = true;
+                    }
+                    else if (e2.valuestr() == LiteParsedQuery::metaGeoNearDistance) {
+                        wantGeoNearDistance = true;
+                    }
+                    else if (e2.valuestr() == LiteParsedQuery::metaGeoNearPoint) {
+                        wantGeoNearPoint = true;
                     }
                 }
                 else {
@@ -186,6 +210,22 @@ namespace mongo {
                                   "Cannot specify positional operator and $elemMatch.");
                 }
 
+                std::string after = mongoutils::str::after(e.fieldName(), ".$");
+                if (mongoutils::str::contains(after, ".$")) {
+                    mongoutils::str::stream ss;
+                    ss << "Positional projection '" << e.fieldName() << "' contains "
+                       << "the positional operator more than once.";
+                    return Status(ErrorCodes::BadValue, ss);
+                }
+
+                std::string matchfield = mongoutils::str::before(e.fieldName(), '.');
+                if (!_hasPositionalOperatorMatch(query, matchfield)) {
+                    mongoutils::str::stream ss;
+                    ss << "Positional projection '" << e.fieldName() << "' does not "
+                       << "match the query document.";
+                    return Status(ErrorCodes::BadValue, ss);
+                }
+
                 arrayOpType = ARRAY_OP_POSITIONAL;
             }
         }
@@ -197,10 +237,21 @@ namespace mongo {
         verify(spec.isOwned());
         pp->_source = spec;
 
+        // returnKey clobbers everything.
+        if (hasIndexKeyProjection) {
+            pp->_requiresDocument = false;
+            *out = pp.release();
+            return Status::OK();
+        }
+
         // Dotted fields aren't covered, non-simple require match details, and as for include, "if
         // we default to including then we can't use an index because we don't know what we're
         // missing."
         pp->_requiresDocument = include || hasNonSimple || hasDottedField;
+
+        // Add geoNear projections.
+        pp->_wantGeoNearPoint = wantGeoNearPoint;
+        pp->_wantGeoNearDistance = wantGeoNearDistance;
 
         // If it's possible to compute the projection in a covered fashion, populate _requiredFields
         // so the planner can perform projection analysis.
@@ -220,42 +271,34 @@ namespace mongo {
             }
         }
 
-        if (ARRAY_OP_POSITIONAL != arrayOpType) {
-            *out = pp.release();
-            return Status::OK();
-        }
+        *out = pp.release();
+        return Status::OK();
+    }
 
-        // Validates positional operator ($) projections.
-        //
-        // XXX: This is copied from how it was validated before.  It should probably walk the
-        // expression tree...but we maintain this for now.
-        // TODO: Remove this and/or make better.
-        BSONObjIterator querySpecIter(query);
-        while (querySpecIter.more()) {
-            BSONElement queryElement = querySpecIter.next();
-            if (mongoutils::str::equals(queryElement.fieldName(), "$and")) {
-                // don't check $and to avoid deep comparison of the arguments.
-                // TODO: can be replaced with Matcher::FieldSink when complete (SERVER-4644)
-                *out = pp.release();
-                return Status::OK();
-            }
-
-            BSONObjIterator projectionSpecIter(spec);
-            while (projectionSpecIter.more()) {
-                // for each projection element
-                BSONElement projectionElement = projectionSpecIter.next();
-                if (mongoutils::str::contains(projectionElement.fieldName(), ".$")
-                    && (mongoutils::str::before(queryElement.fieldName(), '.') ==
-                        mongoutils::str::before(projectionElement.fieldName(), "."))) {
-                    *out = pp.release();
-                    return Status::OK();
+    // static
+    bool ParsedProjection::_hasPositionalOperatorMatch(const MatchExpression* const query,
+                                                       const std::string& matchfield) {
+        if (query->isLogical()) {
+            for (unsigned int i = 0; i < query->numChildren(); ++i) {
+                if (_hasPositionalOperatorMatch(query->getChild(i), matchfield)) {
+                    return true;
                 }
             }
         }
-
-        // auto_ptr cleans up.
-        return Status(ErrorCodes::BadValue,
-                      "Positional operator does not match the query specifier.");
+        else {
+            StringData queryPath = query->path();
+            const char* pathRawData = queryPath.rawData();
+            // We have to make a distinction between match expressions that are
+            // initialized with an empty field/path name "" and match expressions
+            // for which the path is not meaningful (eg. $where and the internal
+            // expression type ALWAYS_FALSE).
+            if (!pathRawData) {
+                return false;
+            }
+            std::string pathPrefix = mongoutils::str::before(pathRawData, '.');
+            return pathPrefix == matchfield;
+        }
+        return false;
     }
 
 }  // namespace mongo

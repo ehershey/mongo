@@ -118,12 +118,6 @@ namespace mongo {
             return false;
         }
 
-        if ( _rhs.type() == Array ) {
-            if ( matchType() != EQ ) {
-                return false;
-            }
-        }
-
         int x = compareElementValues( e, _rhs );
 
         //log() << "\t\t" << x << endl;
@@ -396,6 +390,11 @@ namespace mongo {
     Status ArrayFilterEntries::addEquality( const BSONElement& e ) {
         if ( e.type() == RegEx )
             return Status( ErrorCodes::BadValue, "ArrayFilterEntries equality cannot be a regex" );
+
+        if ( e.type() == Undefined ) {
+            return Status( ErrorCodes::BadValue,
+                           "ArrayFilterEntries equality cannot be undefined" );
+        }
 
         if ( e.type() == jstNULL ) {
             _hasNull = true;

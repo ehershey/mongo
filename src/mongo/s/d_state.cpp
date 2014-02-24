@@ -89,29 +89,56 @@ namespace mongo {
         configServer.init(server);
     }
 
+    // TODO: Consolidate and eliminate these various ways of setting / validating shard names
     bool ShardingState::setShardName( const string& name ) {
+        return setShardNameAndHost( name, "" );
+    }
+
+    bool ShardingState::setShardNameAndHost( const string& name, const string& host ) {
         scoped_lock lk(_mutex);
         if ( _shardName.size() == 0 ) {
             // TODO SERVER-2299 remotely verify the name is sound w.r.t IPs
             _shardName = name;
+
+            string clientAddr = cc().clientAddress(true);
+
+            log() << "remote client " << clientAddr << " initialized this host "
+                  << ( host.empty() ? string( "" ) : string( "(" ) + host + ") " )
+                  << "as shard " << name;
+
             return true;
         }
 
         if ( _shardName == name )
             return true;
 
+        string clientAddr = cc().clientAddress(true);
+
+        warning() << "remote client " << clientAddr << " tried to initialize this host "
+                  << ( host.empty() ? string( "" ) : string( "(" ) + host + ") " )
+                  << "as shard " << name
+                  << ", but shard name was previously initialized as " << _shardName;
+
         return false;
     }
 
     void ShardingState::gotShardName( const string& name ) {
-        if ( setShardName( name ) )
+        gotShardNameAndHost( name, "" );
+    }
+
+    void ShardingState::gotShardNameAndHost( const string& name, const string& host ) {
+        if ( setShardNameAndHost( name, host ) )
             return;
 
+        string clientAddr = cc().clientAddress(true);
         stringstream ss;
-        ss << "gotShardName different than what i had before "
-           << " before [" << _shardName << "] "
-           << " got [" << name << "] "
-           ;
+
+        // Same error as above, to match for reporting
+        ss << "remote client " << clientAddr << " tried to initialize this host "
+           << ( host.empty() ? string( "" ) : string( "(" ) + host + ") " )
+           << "as shard " << name
+           << ", but shard name was previously initialized as " << _shardName;
+
         msgasserted( 13298 , ss.str() );
     }
 
@@ -788,7 +815,7 @@ namespace mongo {
         UnsetShardingCommand() : MongodShardCommand("unsetSharding") {}
 
         virtual void help( stringstream& help ) const {
-            help << " example: { unsetSharding : 1 } ";
+            help << "internal";
         }
 
         virtual LockType locktype() const { return NONE; }
@@ -799,7 +826,7 @@ namespace mongo {
                                            const BSONObj& cmdObj,
                                            std::vector<Privilege>* out) {
             ActionSet actions;
-            actions.addAction(ActionType::unsetSharding);
+            actions.addAction(ActionType::internal);
             out->push_back(Privilege(ResourcePattern::forClusterResource(), actions));
         }
 
@@ -815,7 +842,7 @@ namespace mongo {
         SetShardVersion() : MongodShardCommand("setShardVersion") {}
 
         virtual void help( stringstream& help ) const {
-            help << " example: { setShardVersion : 'alleyinsider.foo' , version : 1 , configdb : '' } ";
+            help << "internal";
         }
 
         virtual bool slaveOk() const { return true; }
@@ -825,7 +852,7 @@ namespace mongo {
                                            const BSONObj& cmdObj,
                                            std::vector<Privilege>* out) {
             ActionSet actions;
-            actions.addAction(ActionType::setShardVersion);
+            actions.addAction(ActionType::internal);
             out->push_back(Privilege(ResourcePattern::forClusterResource(), actions));
         }
 
@@ -911,12 +938,14 @@ namespace mongo {
             if ( ! checkConfigOrInit( cmdObj["configdb"].valuestrsafe() , authoritative , errmsg , result ) )
                 return false;
 
-            // check shard name/hosts are correct
+            // check shard name is correct
             if ( cmdObj["shard"].type() == String ) {
-                shardingState.gotShardName( cmdObj["shard"].String() );
+                // The shard host is also sent when using setShardVersion, report this host if there
+                // is an error.
+                shardingState.gotShardNameAndHost( cmdObj["shard"].String(),
+                                                   cmdObj["shardHost"].str() );
             }
             
-
             // Handle initial shard connection
             if( cmdObj["version"].eoo() && cmdObj["init"].trueValue() ){
 

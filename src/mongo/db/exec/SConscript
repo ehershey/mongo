@@ -41,8 +41,11 @@ env.Library(
         "and_hash.cpp",
         "and_sorted.cpp",
         "collection_scan.cpp",
+        "count.cpp",
+        "distinct_scan.cpp",
         "fetch.cpp",
         "index_scan.cpp",
+        "keep_mutations.cpp",
         "limit.cpp",
         "merge_sort.cpp",
         "oplogstart.cpp",
@@ -60,4 +63,35 @@ env.Library(
     LIBDEPS = [
         "$BUILD_DIR/mongo/bson",
     ],
+)
+
+env.CppUnitTest(
+    target = "sort_test",
+    source = [
+        "sort_test.cpp",
+    ],
+    LIBDEPS = [
+        "exec",
+        "mock_stage",
+        "$BUILD_DIR/mongo/serveronly",
+        "$BUILD_DIR/mongo/coreserver",
+        "$BUILD_DIR/mongo/coredb",
+        "$BUILD_DIR/mongo/mocklib",
+    ],
+    NO_CRUTCH = True,
+)
+
+env.CppUnitTest(
+    target = "projection_exec_test",
+    source = [
+        "projection_exec_test.cpp",
+    ],
+    LIBDEPS = [
+        "exec",
+        "mock_stage",
+        "$BUILD_DIR/mongo/serveronly",
+        "$BUILD_DIR/mongo/coreserver",
+        "$BUILD_DIR/mongo/coredb",
+    ],
+    NO_CRUTCH = True,
 )

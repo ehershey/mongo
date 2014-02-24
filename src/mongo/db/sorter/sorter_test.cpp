@@ -12,6 +12,18 @@
  *
  *    You should have received a copy of the GNU Affero General Public License
  *    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ *    As a special exception, the copyright holders give permission to link the
+ *    code of portions of this program with the OpenSSL library under certain
+ *    conditions as described in each individual source file and distribute
+ *    linked combinations including the program with the OpenSSL library. You
+ *    must comply with the GNU Affero General Public License in all respects
+ *    for all of the code used other than as permitted herein. If you modify
+ *    file(s) with this exception, you may extend this exception to your
+ *    version of the file(s), but you are not obligated to do so. If you do not
+ *    wish to do so, delete this exception statement from your version. If you
+ *    delete this exception statement from all source files in the program,
+ *    then also delete it in the license file.
  */
 
 #include "mongo/platform/basic.h"
@@ -325,9 +337,9 @@ namespace mongo {
                     ASSERT_ITERATORS_EQUIVALENT(done(sorter), correctReverse());
                 }
 
-                // The MSVC++ STL includes extra checks in debug mode that make these tests too
-                // slow to run. Among other things, they make all heap functions O(N) not O(logN).
-#if !(defined(_MSC_VER) && defined(_DEBUG))
+                // The debug builds are too slow to run these tests.
+                // Among other things, MSVC++ makes all heap functions O(N) not O(logN).
+#if !defined(_DEBUG)
                 { // merge all data ASC
                     boost::shared_ptr<IWSorter> sorters[] = {
                         makeSorter(opts, IWComparator(ASC)),
@@ -479,8 +491,8 @@ namespace mongo {
             }
 
             enum Constants {
-                NUM_ITEMS = 10*1000*1000,
-                MEM_LIMIT = 1024*1024,
+                NUM_ITEMS = 500*1000,
+                MEM_LIMIT = 64*1024,
             };
             boost::scoped_array<int> _array;
         };
@@ -491,8 +503,9 @@ namespace mongo {
             typedef LotsOfDataLittleMemory<Random> Parent;
             SortOptions adjustSortOptions(SortOptions opts) {
                 // Make sure our tests will spill or not as desired
-                BOOST_STATIC_ASSERT(MEM_LIMIT / 2 > (     100 * sizeof(IWPair)));
-                BOOST_STATIC_ASSERT(MEM_LIMIT     < (100*1000 * sizeof(IWPair)));
+                BOOST_STATIC_ASSERT(MEM_LIMIT / 2 > ( 100 * sizeof(IWPair)));
+                BOOST_STATIC_ASSERT(MEM_LIMIT     < (5000 * sizeof(IWPair)));
+                BOOST_STATIC_ASSERT(MEM_LIMIT * 2 > (5000 * sizeof(IWPair)));
 
                 // Make sure we use a reasonable number of files when we spill
                 BOOST_STATIC_ASSERT((Parent::NUM_ITEMS * sizeof(IWPair)) / MEM_LIMIT > 100);
@@ -506,7 +519,7 @@ namespace mongo {
             virtual boost::shared_ptr<IWIterator> correctReverse() {
                 return make_shared<LimitIterator>(Limit, Parent::correctReverse());
             }
-            enum { MEM_LIMIT = 512*1024 };
+            enum { MEM_LIMIT = 32*1024 };
         };
     }
 
@@ -529,8 +542,8 @@ namespace mongo {
             add<SorterTests::LotsOfDataWithLimit<1,/*random=*/true> >();  // limit=1 is special case
             add<SorterTests::LotsOfDataWithLimit<100,/*random=*/false> >(); // fits in mem
             add<SorterTests::LotsOfDataWithLimit<100,/*random=*/true> >();  // fits in mem
-            add<SorterTests::LotsOfDataWithLimit<100*1000,/*random=*/false> >(); // spills
-            add<SorterTests::LotsOfDataWithLimit<100*1000,/*random=*/true> >(); // spills
+            add<SorterTests::LotsOfDataWithLimit<5000,/*random=*/false> >(); // spills
+            add<SorterTests::LotsOfDataWithLimit<5000,/*random=*/true> >(); // spills
         }
     } extSortTests;
 }

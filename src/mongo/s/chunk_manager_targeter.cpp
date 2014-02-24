@@ -444,20 +444,40 @@ namespace mongo {
         /**
          * Whether or not the manager/primary pair is different from the other manager/primary pair
          */
-        bool wasMetadataRefreshed( const ChunkManagerPtr& managerA,
-                                   const ShardPtr& primaryA,
-                                   const ChunkManagerPtr& managerB,
-                                   const ShardPtr& primaryB ) {
+        bool isMetadataDifferent( const ChunkManagerPtr& managerA,
+                                  const ShardPtr& primaryA,
+                                  const ChunkManagerPtr& managerB,
+                                  const ShardPtr& primaryB ) {
 
             if ( ( managerA && !managerB ) || ( !managerA && managerB ) || ( primaryA && !primaryB )
                  || ( !primaryA && primaryB ) ) return true;
 
             if ( managerA ) {
-                return managerA->getSequenceNumber() != managerB->getSequenceNumber();
+                return !managerA->getVersion().isStrictlyEqualTo( managerB->getVersion() );
             }
 
             dassert( NULL != primaryA.get() );
             return primaryA->getName() != primaryB->getName();
+        }
+
+        /**
+         * Whether or not the manager/primary pair was changed or refreshed from a previous version
+         * of the metadata.
+         */
+        bool wasMetadataRefreshed( const ChunkManagerPtr& managerA,
+                                   const ShardPtr& primaryA,
+                                   const ChunkManagerPtr& managerB,
+                                   const ShardPtr& primaryB ) {
+
+            if ( isMetadataDifferent( managerA, primaryA, managerB, primaryB ) )
+                return true;
+
+            if ( managerA ) {
+                dassert( managerB.get() ); // otherwise metadata would be different
+                return managerA->getSequenceNumber() != managerB->getSequenceNumber();
+            }
+
+            return false;
         }
     }
 
@@ -491,7 +511,13 @@ namespace mongo {
         return _stats.get();
     }
 
-    Status ChunkManagerTargeter::refreshIfNeeded() {
+    Status ChunkManagerTargeter::refreshIfNeeded( bool *wasChanged ) {
+
+        bool dummy;
+        if ( !wasChanged )
+            wasChanged = &dummy;
+
+        *wasChanged = false;
 
         //
         // Did we have any stale config or targeting errors at all?
@@ -544,6 +570,7 @@ namespace mongo {
                 return refreshNow( RefreshType_RefreshChunkManager );
             }
 
+            *wasChanged = isMetadataDifferent( lastManager, lastPrimary, _manager, _primary );
             return Status::OK();
         }
         else if ( !_remoteShardVersions.empty() ) {
@@ -566,12 +593,24 @@ namespace mongo {
                 return refreshNow( RefreshType_RefreshChunkManager );
             }
 
+            *wasChanged = isMetadataDifferent( lastManager, lastPrimary, _manager, _primary );
             return Status::OK();
         }
 
         // unreachable
         dassert( false );
         return Status::OK();
+    }
+
+    // To match legacy reload behavior, we have to backoff on config reload per-thread
+    // TODO: Centralize this behavior better by refactoring config reload in mongos
+    static const int maxWaitMillis = 500;
+    static boost::thread_specific_ptr<Backoff> perThreadBackoff;
+
+    static void refreshBackoff() {
+        if ( !perThreadBackoff.get() )
+            perThreadBackoff.reset( new Backoff( maxWaitMillis, maxWaitMillis * 2 ) );
+        perThreadBackoff.get()->nextSleepMillis();
     }
 
     Status ChunkManagerTargeter::refreshNow( RefreshType refreshType ) {
@@ -582,6 +621,9 @@ namespace mongo {
         if ( !getDBConfigSafe( _nss.db(), config, &errMsg ) ) {
             return Status( ErrorCodes::DatabaseNotFound, errMsg );
         }
+
+        // Try not to spam the configs
+        refreshBackoff();
 
         // TODO: Improve synchronization and make more explicit
         if ( refreshType == RefreshType_RefreshChunkManager ) {

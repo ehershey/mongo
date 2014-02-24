@@ -29,6 +29,7 @@
 #pragma once
 
 #include "mongo/db/clientcursor.h"
+#include "mongo/db/catalog/collection.h"
 #include "mongo/util/elapsed_tracker.h"
 
 namespace mongo {
@@ -41,7 +42,9 @@ namespace mongo {
             if (NULL != _runnerYielding) {
                 // We were destructed mid-yield.  Since we're being used to yield a runner, we have
                 // to deregister the runner.
-                ClientCursor::deregisterRunner(_runnerYielding);
+                if ( _runnerYielding->collection() ) {
+                    _runnerYielding->collection()->cursorCache()->deregisterRunner(_runnerYielding);
+                }
             }
         }
 
@@ -56,19 +59,31 @@ namespace mongo {
          * Provided runner MUST be YIELD_MANUAL.
          */
         bool yieldAndCheckIfOK(Runner* runner, Record* record = NULL) {
-            verify(runner);
+            invariant(runner);
+            invariant(runner->collection());
+
             int micros = ClientCursor::suggestYieldMicros();
 
             // If micros is not positive, no point in yielding, nobody waiting.
-            // XXX: Do we want to yield anyway if record is not NULL?
+            //
+            // TODO: Do we want to yield anyway if record is not NULL?
+            //
+            // TODO: Track how many times we actually yield, how many times micros is <0, etc.
             if (micros <= 0) { return true; }
 
             // If micros > 0, we should yield.
             runner->saveState();
             _runnerYielding = runner;
-            ClientCursor::registerRunner(_runnerYielding);
+
+            runner->collection()->cursorCache()->registerRunner( _runnerYielding );
+
             staticYield(micros, record);
-            ClientCursor::deregisterRunner(_runnerYielding);
+
+            if ( runner->collection() ) {
+                // if the runner was killed, runner->collection() will return NULL
+                // so we don't deregister as it was done when killed
+                runner->collection()->cursorCache()->deregisterRunner( _runnerYielding );
+            }
             _runnerYielding = NULL;
             _elapsedTracker.resetLastTime();
             return runner->restoreState();
@@ -87,13 +102,10 @@ namespace mongo {
             // we want to page in the record in the lock even if nobody is waiting for the lock?
             if (micros > 0 || (NULL != rec)) {
                 staticYield(micros, rec);
-                // XXX: when do we really want to reset this?
-                //
-                // Currently we reset it when we actually yield.  As such we'll keep on trying
-                // to yield once the tracker has elapsed.
-                //
-                // If we reset it even if we don't yield, we'll wait until the time interval
-                // elapses again to try yielding.
+                // TODO:  When do we really want to reset this?  Currently we reset it when we
+                // actually yield.  As such we'll keep on trying to yield once the tracker has
+                // elapsed.  If we reset it even if we don't yield, we'll wait until the time
+                // interval elapses again to try yielding.
                 _elapsedTracker.resetLastTime();
             }
         }

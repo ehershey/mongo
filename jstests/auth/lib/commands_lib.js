@@ -89,21 +89,24 @@ var roles_write = {
     readWrite: 1,
     readWriteAnyDatabase: 1,
     dbOwner: 1,
+    restore: 1,
     root: 1,
     __system: 1
 };
-var roles_readWrite = {
+var roles_read = {
     read: 1,
     readAnyDatabase: 1,
     readWrite: 1,
     readWriteAnyDatabase: 1,
     dbOwner: 1,
+    backup: 1,
     root: 1,
     __system: 1
 };
-var roles_readWriteAny = {
+var roles_readAny = {
     readAnyDatabase: 1,
     readWriteAnyDatabase: 1,
+    backup: 1,
     root: 1,
     __system: 1
 };
@@ -126,7 +129,7 @@ var roles_writeDbAdmin = {
     dbAdminAnyDatabase: 1,
     dbOwner: 1,
     root: 1,
-    __system: 1 
+    __system: 1
 };
 var roles_writeDbAdminAny = {
     readWriteAnyDatabase: 1,
@@ -134,7 +137,7 @@ var roles_writeDbAdminAny = {
     root: 1,
     __system: 1
 };
-var roles_readWriteDbAdmin = {
+var roles_readDbAdmin = {
     read: 1,
     readAnyDatabase: 1,
     readWrite: 1,
@@ -145,7 +148,7 @@ var roles_readWriteDbAdmin = {
     root: 1,
     __system: 1
 };
-var roles_readWriteDbAdminAny = {
+var roles_readDbAdminAny = {
     readAnyDatabase: 1,
     readWriteAnyDatabase: 1,
     dbAdminAnyDatabase: 1,
@@ -184,6 +187,8 @@ var roles_all = {
     hostManager: 1,
     clusterManager: 1,
     clusterAdmin: 1,
+    backup: 1,
+    restore: 1,
     root: 1,
     __system: 1
 };
@@ -240,14 +245,14 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_readWrite,
+                    roles: roles_read,
                     privileges: [
                         { resource: {db: firstDbName, collection: "foo"}, actions: ["find"] }
                     ]
                 },
                 {
                     runOnDb: secondDbName,
-                    roles: roles_readWriteAny,
+                    roles: roles_readAny,
                     privileges: [
                         { resource: {db: secondDbName, collection: "foo"}, actions: ["find"] }
                     ]
@@ -260,14 +265,14 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_readWrite,
+                    roles: roles_read,
                     privileges: [
                         { resource: {db: firstDbName, collection: "foo"}, actions: ["find"] }
                     ]
                 },
                 {
                     runOnDb: secondDbName,
-                    roles: roles_readWriteAny,
+                    roles: roles_readAny,
                     privileges: [
                         { resource: {db: secondDbName, collection: "foo"}, actions: ["find"] }
                     ]
@@ -280,7 +285,11 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_write,
+                    roles: { readWrite: 1,
+                             readWriteAnyDatabase: 1,
+                             dbOwner: 1,
+                             root: 1,
+                             __system: 1},
                     privileges: [
                         { resource: {db: firstDbName, collection: "foo"}, actions: ["find"] },
                         { resource: {db: firstDbName, collection: "foo_out"}, actions: ["insert"] },
@@ -296,6 +305,29 @@ var authCommandsLib = {
                         { resource: {db: secondDbName, collection: "foo_out"}, actions: ["remove"] }
                     ]
                 }
+            ]
+        },
+        {
+            testname: "appendOplogNote",
+            command: {appendOplogNote: 1, data: {a: 1}},
+            skipSharded: true,
+            testcases: [
+                {
+                    runOnDb: adminDbName,
+                    roles:  {
+                        backup: 1,
+                        clusterManager: 1,
+                        clusterAdmin: 1,
+                        root: 1,
+                        __system: 1
+                    },
+                    privileges: [
+                        { resource: {cluster: true}, actions: ["appendOplogNote"] }
+                    ],
+                    expectFail: true, // because no replication enabled
+                },
+                { runOnDb: firstDbName, roles: {} },
+                { runOnDb: secondDbName, roles: {} }
             ]
         },
         {
@@ -321,7 +353,7 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_readWrite,
+                    roles: roles_read,
                     privileges: [
                         { resource: {db: firstDbName, collection: "x"}, actions: ["find"] }
                     ]
@@ -335,7 +367,7 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: secondDbName,
-                    roles: roles_readWriteAny,
+                    roles: roles_readAny,
                     privileges: [
                         { resource: {db: secondDbName, collection: "x"}, actions: ["find"] }
                     ]
@@ -364,7 +396,7 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: secondDbName,
-                    roles: {readWriteAnyDatabase: 1, root: 1, __system: 1},
+                    roles: {readWriteAnyDatabase: 1, restore: 1, root: 1, __system: 1},
                     privileges: [
                         { resource: {db: secondDbName, collection: "x"}, actions: ["insert", "createIndex"] }
                     ],
@@ -384,7 +416,12 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_write,
+                    roles: { readWrite: 1,
+                             readWriteAnyDatabase: 1,
+                             dbOwner: 1,
+                             root: 1,
+                             __system: 1
+                           },
                     privileges: [
                         { resource: {db: firstDbName, collection: "y"}, actions: ["insert", "createIndex", "convertToCapped"] },
                         { resource: {db: firstDbName, collection: "x"}, actions: ["find"] }
@@ -424,14 +461,14 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_dbAdmin,
+                    roles: Object.extend({restore: 1}, roles_dbAdmin),
                     privileges: [
                         { resource: {db: firstDbName, collection: "foo"}, actions: ["collMod"] }
                     ]
                 },
                 {
                     runOnDb: secondDbName,
-                    roles: roles_dbAdminAny,
+                    roles: Object.extend({restore:1}, roles_dbAdminAny),
                     privileges: [
                         { resource: {db: secondDbName, collection: "foo"}, actions: ["collMod"] }
                     ]
@@ -582,19 +619,36 @@ var authCommandsLib = {
             ]
         },
         {
+            testname: "copydb",
+            command: {copydb: 1, fromdb: firstDbName, todb: secondDbName},
+            testcases: [
+                {
+                    runOnDb: adminDbName,
+                    roles: {readWriteAnyDatabase: 1, root: 1, __system: 1},
+                    privileges: [
+                        { resource: {db: firstDbName, collection: ""}, actions:["find"] },
+                        { resource: {db: firstDbName, collection: "system.js"}, actions:["find"] },
+                        { resource: {db: secondDbName, collection: ""},
+                          actions:["insert", "createIndex"] },
+                        { resource: {db: secondDbName, collection: "system.js"}, actions:["insert"] },
+                    ]
+                },
+            ]
+        },
+        {
             testname: "count",
             command: {count: "x"},
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_readWrite,
+                    roles: roles_read,
                     privileges: [
                         { resource: {db: firstDbName, collection: "x"}, actions: ["find"] }
                     ]
                 },
                 {
                     runOnDb: secondDbName,
-                    roles: roles_readWriteAny,
+                    roles: roles_readAny,
                     privileges: [
                         { resource: {db: secondDbName, collection: "x"}, actions: ["find"] }
                     ]
@@ -608,28 +662,28 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_writeDbAdmin,
+                    roles: Object.extend({restore:1}, roles_writeDbAdmin),
                     privileges: [
                         { resource: {db: firstDbName, collection: "x"}, actions: ["createCollection"] }
                     ]
                 },
                 {
                     runOnDb: firstDbName,
-                    roles: roles_writeDbAdmin,
+                    roles: Object.extend({restore:1}, roles_writeDbAdmin),
                     privileges: [
                         { resource: {db: firstDbName, collection: "x"}, actions: ["insert"] }
                     ]
                 },
                 {
                     runOnDb: secondDbName,
-                    roles: roles_writeDbAdminAny,
+                    roles: Object.extend({restore:1}, roles_writeDbAdminAny),
                     privileges: [
                         { resource: {db: secondDbName, collection: "x"}, actions: ["createCollection"] }
                     ]
                 },
                 {
                     runOnDb: secondDbName,
-                    roles: roles_writeDbAdminAny,
+                    roles: Object.extend({restore:1}, roles_writeDbAdminAny),
                     privileges: [
                         { resource: {db: secondDbName, collection: "x"}, actions: ["insert"] }
                     ]
@@ -697,7 +751,7 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_readWrite,
+                    roles: roles_read,
                     privileges: [
                         { resource: {db: firstDbName, collection: "x"}, actions: ["find"] }
                     ]
@@ -710,7 +764,7 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: secondDbName,
-                    roles: roles_readWriteAny,
+                    roles: roles_readAny,
                     privileges: [
                         { resource: {db: secondDbName, collection: "x"}, actions: ["find"] }
                     ]
@@ -724,14 +778,25 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_readWrite,
+                    roles: { read: 1,
+                             readAnyDatabase: 1,
+                             readWrite: 1,
+                             readWriteAnyDatabase: 1,
+                             dbOwner: 1,
+                             root: 1,
+                             __system: 1
+                           },
                     privileges: [
                         { resource: {db: firstDbName, collection: ""}, actions: ["dbHash"] }
                     ]
                 },
                 {
                     runOnDb: secondDbName,
-                    roles: roles_readWriteAny,
+                    roles: { readAnyDatabase: 1,
+                             readWriteAnyDatabase: 1,
+                             root: 1,
+                             __system: 1
+                           },
                     privileges: [
                         { resource: {db: secondDbName, collection: ""}, actions: ["dbHash"] }
                     ]
@@ -800,14 +865,14 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_readWrite,
+                    roles: roles_read,
                     privileges: [
                         { resource: {db: firstDbName, collection: "coll"}, actions: ["find"] }
                     ]
                 },
                 {
                     runOnDb: secondDbName,
-                    roles: roles_readWriteAny,
+                    roles: roles_readAny,
                     privileges: [
                         { resource: {db: secondDbName, collection: "coll"}, actions: ["find"] }
                     ]
@@ -821,14 +886,14 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_writeDbAdmin,
+                    roles: Object.extend({restore: 1}, roles_writeDbAdmin),
                     privileges: [
                         { resource: {db: firstDbName, collection: "x"}, actions: ["dropCollection"] }
                     ]
                 },
                 {
                     runOnDb: secondDbName,
-                    roles: roles_writeDbAdminAny,
+                    roles: Object.extend({restore: 1}, roles_writeDbAdminAny),
                     privileges: [
                         { resource: {db: secondDbName, collection: "x"}, actions: ["dropCollection"] }
                     ]
@@ -956,14 +1021,14 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_readWrite,
+                    roles: roles_read,
                     privileges: [
                         { resource: {db: firstDbName, collection: ""}, actions: ["find"] }
                     ]
                 },
                 {
                     runOnDb: secondDbName,
-                    roles: roles_readWriteAny,
+                    roles: roles_readAny,
                     privileges: [
                         { resource: {db: secondDbName, collection: ""}, actions: ["find"] }
                     ]
@@ -981,7 +1046,12 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_write,
+                    roles: { readWrite: 1,
+                             readWriteAnyDatabase: 1,
+                             dbOwner: 1,
+                             root: 1,
+                             __system: 1
+                           },
                     privileges: [
                         { resource: {db: firstDbName, collection: "x"}, actions: ["find", "update"] }
                     ]
@@ -1038,14 +1108,14 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_readWrite,
+                    roles: roles_read,
                     privileges: [
                         { resource: {db: firstDbName, collection: "x"}, actions: ["find"] }
                     ]
                 },
                 {
                     runOnDb: secondDbName,
-                    roles: roles_readWriteAny,
+                    roles: roles_readAny,
                     privileges: [
                         { resource: {db: secondDbName, collection: "x"}, actions: ["find"] }
                     ]
@@ -1065,14 +1135,14 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_readWrite,
+                    roles: roles_read,
                     privileges: [
                         { resource: {db: firstDbName, collection: "x"}, actions: ["find"] }
                     ]
                 },
                 {
                     runOnDb: secondDbName,
-                    roles: roles_readWriteAny,
+                    roles: roles_readAny,
                     privileges: [
                         { resource: {db: secondDbName, collection: "x"}, actions: ["find"] }
                     ]
@@ -1131,7 +1201,13 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: adminDbName,
-                    roles: roles_monitoring,
+                    roles: { backup: 1,
+                             restore: 1,
+                             clusterMonitor: 1,
+                             clusterAdmin: 1,
+                             root: 1,
+                             __system: 1
+                           },
                     privileges: [
                         { resource: {cluster: true}, actions: ["getParameter"] }
                     ]
@@ -1209,14 +1285,14 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_readWrite,
+                    roles: roles_read,
                     privileges: [
                         { resource: {db: firstDbName, collection: "x"}, actions: ["find"] }
                     ]
                 },
                 {
                     runOnDb: secondDbName,
-                    roles: roles_readWriteAny,
+                    roles: roles_readAny,
                     privileges: [
                         { resource: {db: secondDbName, collection: "x"}, actions: ["find"] }
                     ]
@@ -1307,6 +1383,7 @@ var authCommandsLib = {
                         userAdminAnyDatabase: 1,
                         clusterMonitor: 1,
                         clusterAdmin: 1,
+                        backup: 1,
                         root: 1,
                         __system: 1
                     },
@@ -1365,14 +1442,14 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_readWrite,
+                    roles: roles_read,
                     privileges: [
                         { resource: {db: firstDbName, collection: "x"}, actions: ["find"] }
                     ]
                 },
                 {
                     runOnDb: secondDbName,
-                    roles: roles_readWriteAny,
+                    roles: roles_readAny,
                     privileges: [
                         { resource: {db: secondDbName, collection: "x"}, actions: ["find"] }
                     ]
@@ -1395,7 +1472,12 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_write,
+                    roles: { readWrite: 1,
+                             readWriteAnyDatabase: 1,
+                             dbOwner: 1,
+                             root: 1,
+                             __system: 1
+                           },
                     privileges: [
                         { resource: {db: firstDbName, collection: "x"}, actions: ["find"] },
                         { resource: {db: firstDbName, collection: "mr_out"}, actions: ["insert", "remove"] }
@@ -1479,6 +1561,81 @@ var authCommandsLib = {
             ]
         },
         {
+            testname: "planCacheIndexFilter",
+            command: {planCacheClearFilters: "x"},
+            skipSharded: true,
+            setup: function (db) { db.x.save( {} ); },
+            teardown: function (db) { db.x.drop(); },
+            testcases: [
+                {
+                    runOnDb: firstDbName,
+                    roles: roles_dbAdmin,
+                    privileges: [
+                        {
+                            resource: {db: firstDbName, collection: "x"},
+                            actions: ["planCacheIndexFilter"]
+                        }
+                    ],
+                },
+                {
+                    runOnDb: secondDbName,
+                    roles: roles_dbAdminAny,
+                    privileges: [
+                        {
+                            resource: {db: secondDbName, collection: "x"},
+                            actions: ["planCacheIndexFilter"]
+                        }
+                    ],
+                },
+            ]
+        },
+        {
+            testname: "planCacheRead",
+            command: {planCacheListQueryShapes: "x"},
+            skipSharded: true,
+            setup: function (db) { db.x.save( {} ); },
+            teardown: function (db) { db.x.drop(); },
+            testcases: [
+                {
+                    runOnDb: firstDbName,
+                    roles: roles_readDbAdmin,
+                    privileges: [
+                        { resource: {db: firstDbName, collection: "x"}, actions: ["planCacheRead"] }
+                    ],
+                },
+                {
+                    runOnDb: secondDbName,
+                    roles: roles_readDbAdminAny,
+                    privileges: [
+                        { resource: {db: secondDbName, collection: "x"}, actions: ["planCacheRead"] }
+                    ],
+                },
+            ]
+        },
+        {
+            testname: "planCacheWrite",
+            command: {planCacheClear: "x"},
+            skipSharded: true,
+            setup: function (db) { db.x.save( {} ); },
+            teardown: function (db) { db.x.drop(); },
+            testcases: [
+                {
+                    runOnDb: firstDbName,
+                    roles: roles_dbAdmin,
+                    privileges: [
+                        { resource: {db: firstDbName, collection: "x"}, actions: ["planCacheWrite"] }
+                    ],
+                },
+                {
+                    runOnDb: secondDbName,
+                    roles: roles_dbAdminAny,
+                    privileges: [
+                        { resource: {db: secondDbName, collection: "x"}, actions: ["planCacheWrite"] }
+                    ],
+                },
+            ]
+        },
+        {
             testname: "ping",
             command: {ping: 1},
             testcases: [
@@ -1488,7 +1645,7 @@ var authCommandsLib = {
             ]
         },
         {
-            testname: "profile",  
+            testname: "profile",
             command: {profile: 0},
             skipSharded: true,
             testcases: [
@@ -1504,6 +1661,43 @@ var authCommandsLib = {
                     roles: roles_dbAdminAny,
                     privileges: [
                         { resource: {db: secondDbName, collection: ""}, actions: ["enableProfiler"] }
+                    ]
+                }
+            ]
+        },
+        {
+            testname: "profileGetLevel",
+            command: {profile: -1},
+            skipSharded: true,
+            testcases: [
+                {
+                    runOnDb: firstDbName,
+                    roles: {
+                        dbAdmin: 1,
+                        dbAdminAnyDatabase: 1,
+                        dbOwner: 1,
+                        clusterMonitor: 1,
+                        clusterAdmin: 1,
+                        root: 1,
+                        __system: 1
+                    },
+                    privileges: [
+                        { resource: {db: firstDbName, collection: "system.profile"},
+                          actions: ["find"] }
+                    ]
+                },
+                {
+                    runOnDb: secondDbName,
+                    roles: {
+                        dbAdminAnyDatabase: 1,
+                        clusterMonitor: 1,
+                        clusterAdmin: 1,
+                        root: 1,
+                        __system: 1
+                    },
+                    privileges: [
+                        { resource: {db: secondDbName, collection: "system.profile"},
+                          actions: ["find"] }
                     ]
                 }
             ]
@@ -1676,7 +1870,7 @@ var authCommandsLib = {
                     runOnDb: adminDbName,
                     roles: {__system: 1},
                     privileges: [
-                        { resource: {cluster: true}, actions: ["replSetElect"] }
+                        { resource: {cluster: true}, actions: ["internal"] }
                     ],
                     expectFail: true
                 },
@@ -1710,7 +1904,7 @@ var authCommandsLib = {
                     runOnDb: adminDbName,
                     roles: {__system: 1},
                     privileges: [
-                        { resource: {cluster: true}, actions: ["replSetFresh"] }
+                        { resource: {cluster: true}, actions: ["internal"] }
                     ],
                     expectFail: true
                 },
@@ -1727,7 +1921,7 @@ var authCommandsLib = {
                     runOnDb: adminDbName,
                     roles: {__system: 1},
                     privileges: [
-                        { resource: {cluster: true}, actions: ["replSetGetRBID"] }
+                        { resource: {cluster: true}, actions: ["internal"] }
                     ],
                     expectFail: true
                 },
@@ -1767,7 +1961,7 @@ var authCommandsLib = {
                     runOnDb: adminDbName,
                     roles: {__system: 1},
                     privileges: [
-                        { resource: {cluster: true}, actions: ["replSetHeartbeat"] }
+                        { resource: {cluster: true}, actions: ["internal"] }
                     ],
                     expectFail: true
                 },
@@ -1943,7 +2137,7 @@ var authCommandsLib = {
                     runOnDb: adminDbName,
                     roles: {__system: 1},
                     privileges: [
-                        { resource: {cluster: true}, actions: ["setShardVersion"] }
+                        { resource: {cluster: true}, actions: ["internal"] }
                     ],
                     expectFail: true
                 },
@@ -2085,7 +2279,7 @@ var authCommandsLib = {
             testcases: [
                 {
                     runOnDb: firstDbName,
-                    roles: roles_readWrite,
+                    roles: roles_read,
                     privileges: [
                         { resource: {db: firstDbName, collection: "x"}, actions: ["find"] }
                     ],
@@ -2093,7 +2287,7 @@ var authCommandsLib = {
                 },
                 {
                     runOnDb: secondDbName,
-                    roles: roles_readWriteAny,
+                    roles: roles_readAny,
                     privileges: [
                         { resource: {db: secondDbName, collection: "x"}, actions: ["find"] }
                     ],
@@ -2156,7 +2350,7 @@ var authCommandsLib = {
                     runOnDb: adminDbName,
                     roles: {__system: 1},
                     privileges: [
-                        { resource: {cluster: true}, actions: ["unsetSharding"] }
+                        { resource: {cluster: true}, actions: ["internal"] }
                     ],
                     expectFail: true
                 },
