@@ -1,4 +1,12 @@
+#!/usr/bin/env python
+# Generate gpg signatures for files in s3
+#
+# Usage: s3sign.py [ --bucket <overridden s3 bucket> ] [ --notary-server <overridden notary server> ] 
+# TODO: filter option
+#
 
+
+import argparse
 import os
 import sys
 
@@ -16,20 +24,21 @@ import subprocess
 def check_dir( bucket , prefix ):
     
     zips = {}
-    md5s = {}
+    sigs = {}
     for ( key , modify , etag , size ) in bucket.listdir( prefix=prefix ):
         if key.endswith( ".tgz" ) or key.endswith( ".zip" ) or key.endswith( ".tar.gz" ):
+            # generate signature
             zips[key] = etag.replace( '"' , '' )
-        elif key.endswith( ".md5" ):
-            md5s[key] = True
+        elif key.endswith( ".sig" ) or key.endswith( ".asc" ):
+            sigs[key] = True
         elif key.find( "$folder$" ) > 0:
             pass
         else:
             print( "unknown file type: " + key )
             
     for x in zips:
-        m = x + ".md5"
-        if m in md5s:
+        m = x + ".sig"
+        if m in sigs:
             continue
 
         print( "need to do: " + x + " " + zips[x] + " to " + m )
