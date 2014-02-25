@@ -1,7 +1,5 @@
 #!/usr/bin/env python
 #
-# Generate and upload gpg signatures for files in S3
-#
 # Generate and upload detached gpg signatures for archive files in Amazon S3
 #
 # Requires standard MongoDB settings.py, like so:
@@ -10,7 +8,7 @@
 # id = "xxxxx"
 # key = "xxxxx"
 #
-# Usage: s3sign.py [ --bucket <overridden s3 bucket> ] [ --notary-url <notary url> ] [ --key-name <key name passed to notary service> ] [ --filter <filter> ]
+# Usage: s3sign.py [ --dry-run ] [ --bucket <overridden s3 bucket> ] [ --notary-url <notary url> ] [ --key-name <key name passed to notary service> ] [ --filter <filter> ]
 #
 
 
@@ -32,10 +30,11 @@ import subprocess
 # parse command line
 #
 parser = argparse.ArgumentParser(description='Sign MongoDB S3 Files')
+parser.add_argument('--dry-run', action='store_true', required=False, help='Do not write anything to S3', default = False);
 parser.add_argument('--bucket', required = False, help='Override bucket in settings.py', default = settings.bucket);
 parser.add_argument('--notary-url', required=False, help='URL base for notary service', default = 'http://localhost:5000');
 parser.add_argument('--key-name', required=False, help='Key parameter to notary service', default = 'test');
-parser.add_argument('--filter', required=False, 
+parser.add_argument('--filter', required=False,
                     help='Only sign files matching case-insensitive substring filter', default = None);
 args = parser.parse_args()
 
@@ -79,8 +78,9 @@ def check_dir( bucket , prefix ):
         if m in sigs:
             continue
 
-        print("need to do: " + x + " " + " to " + m )
-        bucket.put( m , zips[x] , acl="public-read" )
+        print("need to do: " + x + " to " + m )
+        if not args.dry_run:
+          bucket.put( m , zips[x] , acl="public-read" )
 
 
 def run():
