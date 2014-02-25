@@ -10,7 +10,7 @@
 # id = "xxxxx"
 # key = "xxxxx"
 #
-# Usage: s3sign.py [ --bucket <overridden s3 bucket> ] [ --notary-server <notary server> ] [ --filter <filter> ] [ --gpg-key-id <GPG key ID> ]
+# Usage: s3sign.py [ --bucket <overridden s3 bucket> ] [ --notary-server <notary server> ] [ --key-name <key name passed to notary service> ] [ --filter <filter> ]
 #
 
 
@@ -32,7 +32,7 @@ import subprocess
 parser = argparse.ArgumentParser(description='Sign MongoDB S3 Files')
 parser.add_argument('--bucket', required = False, help='Override bucket in settings.py', default = settings.bucket);
 parser.add_argument('--notary-server', required=False, help='Server for notary service', default = 'localhost');
-parser.add_argument('--gpg-key-id', required=False, help='GPG Key ID to sign with', default = None);
+parser.add_argument('--key-name', required=False, help='Key parameter to notary service', default = None);
 parser.add_argument('--filter', required=False, 
                     help='Only sign files matching case-insensitive substring filter', default = None);
 args = parser.parse_args()
