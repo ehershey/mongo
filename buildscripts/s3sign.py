@@ -49,8 +49,10 @@ def check_dir( bucket , prefix ):
     zips = {}
     sigs = {}
     for ( key , modify , etag , size ) in bucket.listdir( prefix=prefix ):
+        # filtered out 
         if args.filter and args.filter.lower() not in key.lower():
             pass
+        # sign it
         elif key.endswith(".tgz" ) or key.endswith(".zip" ) or key.endswith(".tar.gz" ) or key.endswith("md5"):
             # generate signature
             files = {'file': (key, bucket.get(key))}
@@ -64,10 +66,13 @@ def check_dir( bucket , prefix ):
             else:
               print('error signing %s:' % key)
               print response_json.get('message')
+        # signatures
         elif key.endswith(".sig" ) or key.endswith(".asc" ):
             sigs[key] = True
-        elif key.endswith(".msi" ):
+        # file types we don't need to sign
+        elif key.endswith(".msi" ) or key.endswith(".deb") or key.endswith(".rpm"):
             pass
+        # folders
         elif key.find("$folder$" ) > 0:
             pass
         else:
