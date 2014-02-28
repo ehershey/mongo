@@ -56,27 +56,32 @@ def check_dir( bucket , prefix ):
         elif key.endswith(".tgz" ) or key.endswith(".zip" ) or key.endswith(".tar.gz" ) or key.endswith("md5"):
             # generate signature
             files = {'file': (key, bucket.get(key))}
-            r = requests.post(notary_url, files=files, data=notary_payload)
-            # get url for signature file
-            response_json = json.loads(r.text)
-            if response_json.get('permalink'):
-              signature_url = json.loads(r.text)['permalink']
-              signature = requests.get(notary_urlbase + signature_url).text
-              zips[key] = signature
+            response_json = {}
+            try:
+              r = requests.post(notary_url, files=files, data=notary_payload, 
+                                headers = { "Accept": "application/json" })
+              # get url for signature file
+              response_json = json.loads(r.text)
+            except Exception as e:
+              print('error contacting signing service for %s:\n%s' % (key, e.message))
+              continue
+            if 'permalink' in response_json:
+              signature_url = response_json['permalink']
+              try:
+                signature = requests.get(notary_urlbase + signature_url).text
+                zips[key] = signature
+              except Exception as e: 
+                print('error downloading signature from signing service for %s:\n%s' % (key, e.message))
             else:
-              print('error signing %s:' % key)
-              print response_json.get('message')
+              print('error from signing service for %s:\n%s' % (key, response_json.get('message')))
         # signatures
         elif key.endswith(".sig" ) or key.endswith(".asc" ):
             sigs[key] = True
         # file types we don't need to sign
         elif key.endswith(".msi" ) or key.endswith(".deb") or key.endswith(".rpm"):
             pass
-        # folders
-        elif key.find("$folder$" ) > 0:
-            pass
         else:
-            print("unknown file type: " + key )
+            print("unknown file type: %s" % key)
 
     for x in zips:
         m = x + ".sig"
