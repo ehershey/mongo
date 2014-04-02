@@ -18,7 +18,9 @@
 #pragma once
 
 #include <ctime>
+#include <stdlib.h>
 #include <string>
+#include <time.h>
 #include <boost/thread/xtime.hpp>
 #include <boost/version.hpp>
 
@@ -153,6 +155,26 @@ namespace mongo {
 #define MONGO_BOOST_TIME_UTC boost::TIME_UTC_
 #else
 #define MONGO_BOOST_TIME_UTC boost::TIME_UTC
+#endif
+
+#if defined(__sunos__) && DEFINED_TIMEGM
+#define DEFINED_TIMEGM 1
+  
+    time_t imegm (struct tm *tm) {
+        time_t ret;
+        char *tz;
+  
+        tz = getenv("TZ");
+        setenv("TZ", "", 1);
+        tzset();
+        ret = mktime(tm);
+        if (tz)
+            setenv("TZ", tz, 1);
+        else
+            unsetenv("TZ");
+        tzset();
+       return ret;
+    }
 #endif
 
 }  // namespace mongo
