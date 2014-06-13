@@ -162,6 +162,11 @@ class Distro(object):
                 return "precise"
             else:
                 raise Exception("unsupported build_os: %s" % build_os)
+         elif self.n == 'debian':
+            if build_os == 'debian7':
+                return 'wheezy'
+            else:
+                raise Exception("unsupported build_os: %s" % build_os)
         else:
             raise Exception("unsupported distro: %s" % self.n)
 
