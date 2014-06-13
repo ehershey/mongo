@@ -49,7 +49,8 @@ REPOPATH="/var/www/repo"
 ARCHES=["x86_64"]
 
 # Made up names for the flavors of distribution we package for.
-DISTROS=["redhat","ubuntu"]
+#DISTROS=["redhat","ubuntu"]
+DISTROS=["debian"]
 
 
 class Spec(object):
@@ -161,6 +162,11 @@ class Distro(object):
                 return "precise"
             else:
                 raise Exception("unsupported build_os: %s" % build_os)
+        elif self.n == 'debian':
+            if build_os == 'debian71':
+                return 'wheezy'
+            else:
+                raise Exception("unsupported build_os: %s" % build_os)
         else:
             raise Exception("unsupported distro: %s" % self.n)
 
@@ -174,12 +180,14 @@ class Distro(object):
 
     def build_os(self):
         """Return the build os label in the binary package to download ("rhel57" and "rhel62"
-        for redhat, "ubuntu1204" for Ubuntu and Debian)"""
+        for redhat, "ubuntu1204" for Ubuntu and "debian71" for Debian)"""
 
-        if re.search("^(debian|ubuntu)", self.n):
-            return [ "ubuntu1204" ]
-        elif re.search("(redhat|fedora|centos)", self.n):
+        if re.search("(redhat|fedora|centos)", self.n):
             return [ "rhel62", "rhel57" ]
+        elif self.n == 'ubuntu':
+            return [ "ubuntu1204" ]
+        elif self.n == 'debian':
+            return [ "debian71" ]
         else:
             raise Exception("BUG: unsupported platform?")
 
