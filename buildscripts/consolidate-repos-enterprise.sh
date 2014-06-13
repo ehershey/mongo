@@ -111,6 +111,7 @@ done
 # /var/www-enterprise/repo.consolidated/yum/redhat/5/mongodb-enterprise/unstable -> 2.5
 # /var/www-enterprise/repo.consolidated/yum/redhat/6/mongodb-enterprise/unstable -> 2.5
 # /var/www-enterprise/repo.consolidated/apt/ubuntu/dists/precise/mongodb-enterprise/unstable -> 2.5
+# /var/www-enterprise/repo.consolidated/apt/debian/dists/wheezy/mongodb-enterprise/unstable -> 2.5
 #
 for unstable_branch_dir in "$repodir"/yum/redhat/*/*/$unstable_branch "$repodir"/apt/debian/dists/*/*/$unstable_branch "$repodir"/apt/ubuntu/dists/*/*/$unstable_branch
 do
