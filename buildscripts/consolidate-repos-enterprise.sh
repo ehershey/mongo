@@ -13,8 +13,8 @@ repodir=/var/www-enterprise/repo.consolidated
 
 gpg_recip='<richard@10gen.com>'
 
-stable_branch="2.4"
-unstable_branch="2.5"
+stable_branch="2.6"
+unstable_branch="2.7"
 
 echo "Using directory: $repodir"
 
