@@ -446,25 +446,19 @@ def make_deb(distro, build_os, arch, spec, srcdir):
 def make_deb_repo(repo, distro, build_os, spec):
     # Note: the Debian repository Packages files must be generated
     # very carefully in order to be usable.
-    oldpwd=os.getcwd()
-    os.chdir(repo+"../../../../../../")
+    d = repo+"../../../../../../"
+    s=backtick(["dpkg-scanpackages", d, "/dev/null"])
+    f=open(d+"/Packages", "a")
     try:
-        dirs=set([os.path.dirname(deb)[2:] for deb in backtick(["find", ".", "-name", "*.deb"]).split()])
-        for d in dirs:
-            s=backtick(["dpkg-scanpackages", d, "/dev/null"])
-            f=open(repo+"/Packages", "a")
-            try:
-                f.write(s)
-            finally:
-                f.close()
-            b=backtick(["gzip", "-9c", d+"/Packages"])
-            f=open(d+"/Packages.gz", "wb")
-            try:
-                f.write(b)
-            finally:
-                f.close()
+        f.write(s)
     finally:
-        os.chdir(oldpwd)
+        f.close()
+    b=backtick(["gzip", "-9c", d+"/Packages"])
+    f=open(d+"/Packages.gz", "wb")
+    try:
+        f.write(b)
+    finally:
+        f.close()
     # Notes: the Release{,.gpg} files must live in a special place,
     # and must be created after all the Packages.gz files have been
     # done.
