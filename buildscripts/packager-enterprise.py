@@ -128,6 +128,17 @@ class Distro(object):
         else:
             raise Exception("BUG: unsupported platform?")
 
+    def packagedir(self, arch, build_os, spec):
+        """For Debian, packages go into a special directory. For Ubuntu
+        and RedHat, this is the same as the repo directory
+        """
+
+        if re.search("^debian", self.n):
+            return "repo/apt/%s/pool/main/m/mongodb-enterprise/" % (self.n)
+        else:
+            return self.repodir(arch, build_os, spec)
+
+
     def repodir(self, arch, build_os, spec):
         """Return the directory where we'll place the package files for
         (distro, distro_version) in that distro's preferred repository
@@ -147,7 +158,7 @@ class Distro(object):
         if re.search("^ubuntu", self.n):
             return "repo/apt/%s/dists/%s/mongodb-enterprise/%s/multiverse/binary-%s/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
         elif re.search("^debian", self.n):
-            return "repo/apt/%s/pool/main/m/mongodb-enterprise-%s/binary-%s/" % (self.n, spec.branch(), self.archname(arch))
+            return "repo/apt/%s/dists/%s/mongodb-enterprise/%s/main/binary-%s/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
         elif re.search("(redhat|fedora|centos)", self.n):
             return "repo/yum/%s/%s/mongodb-enterprise/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
         else:
@@ -219,7 +230,7 @@ def main(argv):
         # Download the binaries.
         urlfmt="http://downloads.mongodb.com/linux/mongodb-linux-%s-enterprise-%s-%s.tgz"
 
-        # Build a pacakge for each distro/spec/arch tuple, and
+        # Build a package for each distro/spec/arch tuple, and
         # accumulate the repository-layout directories.
         for (distro, spec, arch) in crossproduct(distros, specs, ARCHES):
 
@@ -419,13 +430,18 @@ def make_deb(distro, build_os, arch, spec, srcdir):
         sysassert(["dpkg-buildpackage", "-a"+distro_arch, "-k Richard Kreuter <richard@10gen.com>"])
     finally:
         os.chdir(oldcwd)
-    r=distro.repodir(arch, build_os, spec)
+    # Debian stores packages separately from repo metadata, so use separate directories
+    # for the repo and the packages
+    #
+    r=distro.packagedir(arch, build_os, spec)
     ensure_dir(r)
+    repodir = distro.repodir(arch, build_os, spec)
+    ensure_dir(repodir)
     # FIXME: see if shutil.copyfile or something can do this without
     # much pain.
     #sysassert(["cp", "-v", sdir+"../%s%s_%s%s_%s.deb"%(distro.pkgbase(), suffix, spec.pversion(distro), "-"+spec.param("revision") if spec.param("revision") else"", distro_arch), r])
     sysassert(["sh", "-c", "cp -v \"%s/../\"*.deb \"%s\""%(sdir, r)])
-    return r
+    return repodir
 
 def make_deb_repo(repo, distro, build_os, spec):
     # Note: the Debian repository Packages files must be generated
