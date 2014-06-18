@@ -143,8 +143,10 @@ class Distro(object):
 
         """
 
-        if re.search("^(debian|ubuntu)", self.n):
+        if re.search("^ubuntu", self.n):
             return "repo/apt/%s/dists/%s/mongodb-enterprise/%s/multiverse/binary-%s/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
+        elif re.search("^debian", self.n):
+            return "repo/apt/%s/pool/main/m/mongodb-enterprise-%s/binary-%s/" % (self.n, spec.branch(), self.archname(arch))
         elif re.search("(redhat|fedora|centos)", self.n):
             return "repo/yum/%s/%s/mongodb-enterprise/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
         else:
