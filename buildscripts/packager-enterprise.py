@@ -448,13 +448,13 @@ def make_deb_repo(repo, distro, build_os, spec):
     # very carefully in order to be usable.
     d = repo+"../../../../../../"
     s=backtick(["dpkg-scanpackages", d, "/dev/null"])
-    f=open(d+"/Packages", "a")
+    f=open(repo+"/Packages", "a")
     try:
         f.write(s)
     finally:
         f.close()
-    b=backtick(["gzip", "-9c", d+"/Packages"])
-    f=open(d+"/Packages.gz", "wb")
+    b=backtick(["gzip", "-9c", repo+"/Packages"])
+    f=open(repo+"/Packages.gz", "wb")
     try:
         f.write(b)
     finally:
