@@ -49,7 +49,8 @@ REPOPATH="/var/www/repo"
 ARCHES=["x86_64"]
 
 # Made up names for the flavors of distribution we package for.
-DISTROS=["debian","redhat","ubuntu"]
+#DISTROS=["debian","redhat","ubuntu"]
+DISTROS=["debian"]
 
 
 class Spec(object):
