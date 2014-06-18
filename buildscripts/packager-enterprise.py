@@ -448,7 +448,7 @@ def make_deb_repo(repo, distro, build_os, spec):
     # very carefully in order to be usable.
     d = repo+"../../../../../../"
     oldpwd=os.getcwd()
-    os.chdir(repo+"../../")
+    os.chdir(d)
     try:
         s=backtick(["dpkg-scanpackages", ".", "/dev/null"])
         f=open(oldpwd+'/'+repo+"/Packages", "a")
