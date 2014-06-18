@@ -452,7 +452,7 @@ def make_deb_repo(repo, distro, build_os, spec):
         dirs=set([os.path.dirname(deb)[2:] for deb in backtick(["find", ".", "-name", "*.deb"]).split()])
         for d in dirs:
             s=backtick(["dpkg-scanpackages", d, "/dev/null"])
-            f=open(d+"/Packages", "w")
+            f=open(repodir+"/Packages", "a")
             try:
                 f.write(s)
             finally:
