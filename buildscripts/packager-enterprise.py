@@ -443,32 +443,11 @@ def make_deb(distro, build_os, arch, spec, srcdir):
     sysassert(["sh", "-c", "cp -v \"%s/../\"*.deb \"%s\""%(sdir, r)])
     return repodir
 
-def make_deb_repo_old(repo, distro, build_os, spec):
-    # Note: the Debian repository Packages files must be generated
-    # very carefully in order to be usable.
-    d = repo+"../../../../../../"
-    oldpwd=os.getcwd()
-    os.chdir(d)
-    try:
-        s=backtick(["dpkg-scanpackages", "pool", "/dev/null"])
-        f=open(oldpwd+'/'+repo+"/Packages", "a")
-        try:
-            f.write(s)
-        finally:
-            f.close()
-        b=backtick(["gzip", "-9c", oldpwd+'/'+repo+"/Packages"])
-        f=open(oldpwd+'/'+repo+"/Packages.gz", "wb")
-        try:
-            f.write(b)
-        finally:
-            f.close()
-    finally:
-        os.chdir(oldpwd)
 def make_deb_repo(repo, distro, build_os, spec):
     # Note: the Debian repository Packages files must be generated
     # very carefully in order to be usable.
     oldpwd=os.getcwd()
-    os.chdir(repo+"../../../../")
+    os.chdir(repo+"../../../../../../")
     try:
         dirs=set([os.path.dirname(deb)[2:] for deb in backtick(["find", ".", "-name", "*.deb"]).split()])
         for d in dirs:
