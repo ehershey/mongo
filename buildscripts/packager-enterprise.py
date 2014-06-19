@@ -468,18 +468,18 @@ def make_deb_repo(repo, distro, build_os, spec):
     # Note: the Debian repository Packages files must be generated
     # very carefully in order to be usable.
     oldpwd=os.getcwd()
-    os.chdir(repo+"../../../../../../")
+    os.chdir(repo+"../../../../")
     try:
         dirs=set([os.path.dirname(deb)[2:] for deb in backtick(["find", ".", "-name", "*.deb"]).split()])
         for d in dirs:
             s=backtick(["dpkg-scanpackages", d, "/dev/null"])
-            f=open(d+"/Packages", "w")
+            f=open(oldpwd+'/'+repo+"/Packages", "a")
             try:
                 f.write(s)
             finally:
                 f.close()
-            b=backtick(["gzip", "-9c", d+"/Packages"])
-            f=open(d+"/Packages.gz", "wb")
+            b=backtick(["gzip", "-9c", oldpwd+'/'+repo+"/Packages"])
+            f=open(oldpwd+'/'+repo+"/Packages.gz", "wb")
             try:
                 f.write(b)
             finally:
