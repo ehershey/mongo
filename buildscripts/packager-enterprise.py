@@ -443,7 +443,7 @@ def make_deb(distro, build_os, arch, spec, srcdir):
     sysassert(["sh", "-c", "cp -v \"%s/../\"*.deb \"%s\""%(sdir, r)])
     return repodir
 
-def make_deb_repo(repo, distro, build_os, spec):
+def make_deb_repo_old(repo, distro, build_os, spec):
     # Note: the Debian repository Packages files must be generated
     # very carefully in order to be usable.
     d = repo+"../../../../../../"
@@ -464,6 +464,7 @@ def make_deb_repo(repo, distro, build_os, spec):
             f.close()
     finally:
         os.chdir(oldpwd)
+def make_deb_repo(repo, distro, build_os, spec):
     # Notes: the Release{,.gpg} files must live in a special place,
     # and must be created after all the Packages.gz files have been
     # done.
