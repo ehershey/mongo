@@ -450,7 +450,7 @@ def make_deb_repo(repo, distro, build_os, spec):
     oldpwd=os.getcwd()
     os.chdir(d)
     try:
-        s=backtick(["dpkg-scanpackages", ".", "/dev/null"])
+        s=backtick(["dpkg-scanpackages", "pool", "/dev/null"])
         f=open(oldpwd+'/'+repo+"/Packages", "a")
         try:
             f.write(s)
