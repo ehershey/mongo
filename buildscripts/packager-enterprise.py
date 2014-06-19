@@ -49,9 +49,7 @@ REPOPATH="/var/www/repo"
 ARCHES=["x86_64"]
 
 # Made up names for the flavors of distribution we package for.
-#DISTROS=["debian","redhat","ubuntu"]
-DISTROS=["debian"]
-
+DISTROS=["debian","redhat","ubuntu"]
 
 class Spec(object):
     def __init__(self, specstr):
@@ -447,7 +445,7 @@ def make_deb_repo(repo, distro, build_os, spec):
     # Note: the Debian repository Packages files must be generated
     # very carefully in order to be usable.
     oldpwd=os.getcwd()
-    os.chdir(repo+"../../../../../../")
+    os.chdir(repo+"../../../../")
     try:
         dirs=set([os.path.dirname(deb)[2:] for deb in backtick(["find", ".", "-name", "*.deb"]).split()])
         for d in dirs:
