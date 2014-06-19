@@ -138,17 +138,30 @@ class Distro(object):
         repo/apt/ubuntu/dists/precise/mongodb-enterprise/2.5/multiverse/binary-amd64
         repo/apt/ubuntu/dists/precise/mongodb-enterprise/2.5/multiverse/binary-i386
 
+        repo/apt/debian/dists/wheezy/mongodb-enterprise/2.5/main/binary-amd64
+        repo/apt/debian/dists/wheezy/mongodb-enterprise/2.5/main/binary-i386
+
         repo/yum/redhat/6/mongodb-enterprise/2.5/x86_64
         yum/redhat/6/mongodb-enterprise/2.5/i386
 
         """
 
         if re.search("^(debian|ubuntu)", self.n):
-            return "repo/apt/%s/dists/%s/mongodb-enterprise/%s/multiverse/binary-%s/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
+            return "repo/apt/%s/dists/%s/mongodb-enterprise/%s/%s/binary-%s/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.repo_component(), self.archname(arch))
         elif re.search("(redhat|fedora|centos)", self.n):
             return "repo/yum/%s/%s/mongodb-enterprise/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
         else:
             raise Exception("BUG: unsupported platform?")
+
+    def repo_component(self):
+        """Return the name of the section/component/pool we are publishing into -
+        e.g. "multiverse" for Ubuntu, "main" for debian."""
+        if self.n == 'ubuntu':
+          return "multiverse"
+        elif self.n == 'debian':
+          return "main"
+        else:
+            raise Exception("unsupported distro: %s" % self.n)
 
     def repo_os_version(self, build_os):
         """Return an OS version suitable for package repo directory
@@ -454,9 +467,9 @@ Label: mongodb
 Suite: mongodb
 Codename: %s/mongodb-enterprise
 Architectures: amd64
-Components: multiverse
+Components: %s
 Description: MongoDB packages
-""" % (distro.repo_os_version(build_os))
+""" % (distro.repo_os_version(build_os), distro.repo_component())
     if os.path.exists(repo+"../../Release"):
         os.unlink(repo+"../../Release")
     if os.path.exists(repo+"../../Release.gpg"):
