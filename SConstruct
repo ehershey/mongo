@@ -711,8 +711,8 @@ elif linux:
 
     if static:
         env.Append( LINKFLAGS=" -static " )
-    if has_option( "static-libstdc++" ):
-        env.Append( LINKFLAGS=["-static-libstdc++", "-static-libgcc"] )
+    #if has_option( "static-libstdc++" ):
+env.Append( LINKFLAGS=["-static-libstdc++", "-static-libgcc"] )
 
 elif solaris:
      env.Append( CPPDEFINES=[ "__sunos__" ] )
