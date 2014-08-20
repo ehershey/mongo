@@ -557,6 +557,12 @@ def make_rpm(distro, arch, spec, srcdir):
     # Create the specfile.
     suffix=spec.suffix()
     sdir=setupdir(distro, arch, spec)
+
+    # Use special suse init script if we're building for SUSE 
+    #
+    if distro == "suse"
+        os.link(sdir+"rpm/init.d-mongod.suse", sdir+"rpm/init.d/mongod")
+
     specfile=srcdir+"rpm/mongodb%s.spec" % suffix
     topdir=ensure_dir(os.getcwd()+'/rpmbuild/')
     for subdir in ["BUILD", "RPMS", "SOURCES", "SPECS", "SRPMS"]:
