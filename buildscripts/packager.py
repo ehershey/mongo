@@ -560,7 +560,7 @@ def make_rpm(distro, arch, spec, srcdir):
 
     # Use special suse init script if we're building for SUSE 
     #
-    if distro == "suse":
+    if distro.name() == "suse":
         os.unlink(sdir+"rpm/init.d-mongod")
         os.link(sdir+"rpm/init.d-mongod.suse", sdir+"rpm/init.d-mongod")
 
