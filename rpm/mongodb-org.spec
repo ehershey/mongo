@@ -234,6 +234,7 @@ fi
 
 %{_bindir}/bsondump
 %{_bindir}/mongodump
+%{_bindir}/mongoshim
 %{_bindir}/mongoexport
 %{_bindir}/mongofiles
 %{_bindir}/mongoimport
@@ -245,6 +246,7 @@ fi
 
 %{_mandir}/man1/bsondump.1*
 %{_mandir}/man1/mongodump.1*
+%{_mandir}/man1/mongoshim.1*
 %{_mandir}/man1/mongoexport.1*
 %{_mandir}/man1/mongofiles.1*
 %{_mandir}/man1/mongoimport.1*

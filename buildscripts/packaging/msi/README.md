@@ -26,6 +26,7 @@ or using the Installer GUI
 		* mongofiles.exe
 		* mongooplog.exe
 		* mongoperf.exe
+		* mongoshim.exe
 
 ## Typical install
 The typical (default) install, installs all except the Router and 

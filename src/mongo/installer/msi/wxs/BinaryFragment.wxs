@@ -22,6 +22,10 @@
         <File Id="f_mongodump" Name="mongodump.exe" Source="$(var.ToolBinarySource)\mongodump.exe"
               DiskId ="1" KeyPath="yes"/>
       </Component>
+      <Component Id="c_mongoshim" Guid="DD1EFCD3-D6F8-46AD-ACE8-572C1C4C086F">
+        <File Id="f_mongoshim" Name="mongoshim.exe" Source="$(var.ToolBinarySource)\mongoshim.exe"
+              DiskId ="1" KeyPath="yes"/>
+      </Component>
       <Component Id="c_mongoexport" Guid="FD5FFDE2-53A1-45F3-9CCA-3AC311DF647C">
         <File Id="f_mongoexport" Name="mongoexport.exe" Source="$(var.ToolBinarySource)\mongoexport.exe"
               DiskId ="1" KeyPath="yes"/>

@@ -79,8 +79,9 @@
         </Feature>     
         <Feature Id="MiscellaneousTools"
                 Title ="Miscellaneous Tools"
-                Description="Miscellaneous MongoDB tools (bsondump, mongofiles, mongooplog, mongoperf)"
+                Description="Miscellaneous MongoDB tools (mongoshim, bsondump, mongofiles, mongooplog, mongoperf)"
                 Level ="1000">
+          <ComponentRef Id="c_mongoshim"/>
           <ComponentRef Id="c_bsondump"/>
           <ComponentRef Id="c_mongofiles"/>
           <ComponentRef Id="c_mongooplog"/>
