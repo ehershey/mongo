@@ -210,9 +210,11 @@ class Distro(object):
         if re.search("(suse)", self.n):
             return [ "suse11" ]
         if re.search("(redhat|fedora|centos)", self.n):
-            return [ "rhel70", "rhel62", "rhel57" ]
+            #return [ "rhel70", "rhel62", "rhel57" ]
+            return [ "rhel62", "rhel57" ]
         elif self.n == 'ubuntu':
-            return [ "ubuntu1204", "ubuntu1404" ]
+            #return [ "ubuntu1204", "ubuntu1404" ]
+            return [ "ubuntu1204" ]
         elif self.n == 'debian':
             return [ "debian71" ]
         else:
