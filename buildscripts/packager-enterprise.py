@@ -49,7 +49,7 @@ REPOPATH="/var/www/repo"
 ARCHES=["x86_64"]
 
 # Made up names for the flavors of distribution we package for.
-DISTROS=["suse","debian","redhat","ubuntu"]
+DISTROS=["redhat","ubuntu"]
 
 
 class Spec(object):
@@ -209,9 +209,9 @@ class Distro(object):
         if re.search("(suse)", self.n):
             return [ "suse11" ]
         if re.search("(redhat|fedora|centos)", self.n):
-            return [ "rhel62", "rhel57" ]
+            return [ "rhel70" ]
         elif self.n == 'ubuntu':
-            return [ "ubuntu1204" ]
+            return [ "ubuntu1404" ]
         elif self.n == 'debian':
             return [ "debian71" ]
         else:
