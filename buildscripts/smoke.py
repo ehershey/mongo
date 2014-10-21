@@ -254,6 +254,8 @@ class mongod(NullMongod):
             argv += ['--clusterAuthMode','x509'];
             self.auth = True
         print "running " + " ".join(argv)
+        print "cwd: " + os.getcwd()
+        print "$SNMPCONFPATH" + os.environ['SNMPCONFPATH']
         self.proc = self._start(buildlogger(argv, is_global=True))
 
         if not self.did_mongod_start(self.port):
