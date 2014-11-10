@@ -32,44 +32,35 @@ from glob import glob
 from packager import httpget
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
 import tempfile
 import time
 import urlparse
-
-# For the moment, this program runs on the host that also serves our
-# repositories to the world, so the last thing the program does is
-# move the repositories into place.  Make this be the path where the
-# web server will look for repositories.
-REPOPATH="/var/www/repo"
+import argparse
 
 # The MongoDB names for the architectures we support.
-ARCHES=["x86_64"]
+DEFAULT_ARCHES=["x86_64"]
 
 # Made up names for the flavors of distribution we package for.
-DISTROS=["suse", "debian","redhat","ubuntu"]
+DEFAULT_DISTROS=["suse", "debian","redhat","ubuntu"]
 
 
 class Spec(object):
-    def __init__(self, specstr):
-        tup = specstr.split(":")
-        self.ver = tup[0]
-        # Hack: the second item in the tuple is treated as a suffix if
-        # it lacks an equals sign; otherwise it's the start of named
-        # parameters.
-        self.suf = None
-        if len(tup) > 1 and tup[1].find("=") == -1:
-            self.suf = tup[1]
-        # Catch-all for any other parameters to the packaging.
-        i = 2 if self.suf else 1
-        self.params = dict([s.split("=") for s in tup[i:]])
-        for key in self.params.keys():
-            assert(key in ["suffix", "revision"])
+    def __init__(self, ver):
+        self.ver = ver
 
     def version(self):
         return self.ver
+
+    def metadata_gitspec(self):
+        """Git revision to use for spec+control+init+manpage files"""
+        if(self.metadata_gitspec):
+          return self.metadata_gitspec
+        else:
+          return 'r' + self.version()
 
     def version_better_than(self, version_string):
         # FIXME: this is wrong, but I'm in a hurry.
@@ -77,14 +68,7 @@ class Spec(object):
         return self.ver > version_string
 
     def suffix(self):
-        # suffix is what we tack on after pkgbase.
-        if self.suf:
-            return self.suf
-        elif "suffix" in self.params:
-            return self.params["suffix"]
-        else:
-            return "-enterprise" if int(self.ver.split(".")[1])%2==0 else "-enterprise-unstable"
-
+        return "-enterprise" if int(self.ver.split(".")[1])%2==0 else "-enterprise-unstable"
 
     def pversion(self, distro):
         # Note: Debian packages have funny rules about dashes in
@@ -104,7 +88,7 @@ class Spec(object):
         return None
 
     def branch(self):
-        """Return the major and minor portions of the specificed version.
+        """Return the major and minor portions of the specified version.
         For example, if the version is "2.5.5" the branch would be "2.5"
         """
         return ".".join(self.ver.split(".")[0:2])
@@ -223,9 +207,25 @@ class Distro(object):
         "el6" for rhel 6.x, return anything else unchanged"""
 
         return re.sub(r'^rh(el\d).*$', r'\1', build_os)
+
+        print """Usage: packager.py --server-version <version> [ --metadata-gitspec <gitspec> ] [ --distro <distro>[,<distro> ...] ] [ --arch <arch>[,<arch ...] ] [ --tarball <path to tarball> ]"""
+
 def main(argv):
-    (flags, specs) = parse_args(argv[1:])
-    distros=[Distro(distro) for distro in DISTROS]
+    parser = argparse.ArgumentParser(description='Build MongoDB Packages')
+    parser.add_argument("-s", "--server-version", help="Server version to build (e.g. 2.7.8-rc0)")
+    parser.add_argument("-m", "--metadata-gitspec", help="Gitspec to use for package metadata files", required=False)
+    parser.add_argument("-d", "--distros", help="Distros to build for", choices=DEFAULT_DISTROS, required=False, action='append')
+    parser.add_argument("-a", "--arches", help="Architecture to build", choices=DEFAULT_ARCHES, required=False, action='append')
+    parser.add_argument("-t", "--tarball", help="Local tarball to package instead of downloading (only valid with one distro/arch combination)", required=False, type=lambda x: is_valid_file(parser, x))
+    args = parser.parse_args()
+
+    if len(args.distros) * len(args.arches) > 1 and args.tarball:
+      parser.error("Can only specify local tarball with one distro/arch combination")
+
+
+    distros=[Distro(distro) for distro in args.distros]
+
+    spec = Spec(args.server_version)
 
     oldcwd=os.getcwd()
     srcdir=oldcwd+"/../"
@@ -235,63 +235,29 @@ def main(argv):
     prefix=tempfile.mkdtemp()
     print "Working in directory %s" % prefix
 
-    # This will be a list of directories where we put packages in
-    # "repository layout".
-    repos=[]
-
     os.chdir(prefix)
     try:
-        # Download the binaries.
-        urlfmt="http://downloads.mongodb.com/linux/mongodb-linux-%s-enterprise-%s-%s.tgz"
+      # Download the binaries.
+      urlfmt="http://downloads.mongodb.com/linux/mongodb-linux-%s-enterprise-%s-%s.tgz"
 
-        # Build a pacakge for each distro/spec/arch tuple, and
-        # accumulate the repository-layout directories.
-        for (distro, spec, arch) in crossproduct(distros, specs, ARCHES):
+      # Build a package for each distro/spec/arch tuple, and
+      # accumulate the repository-layout directories.
+      for (distro, arch) in crossproduct(distros, args.arches):
 
           for build_os in distro.build_os():
 
-            httpget(urlfmt % (arch, build_os, spec.version()), ensure_dir(tarfile(build_os, arch, spec)))
+            if args.tarball:
+              filename = tarfile(build_os, arch, spec)
+              ensure_dir(filename)
+              shutil.copyfile(args.tarball,filename)
+            else:
+              httpget(urlfmt % (arch, build_os, spec.version()), ensure_dir(tarfile(build_os, arch, spec)))
 
             repo = make_package(distro, build_os, arch, spec, srcdir)
             make_repo(repo, distro, build_os, spec)
 
     finally:
         os.chdir(oldcwd)
-    if "-n" not in flags:
-        move_repos_into_place(prefix+"/repo", REPOPATH)
-        # FIXME: try shutil.rmtree some day.
-        sysassert(["rm", "-rv", prefix])
-
-
-def parse_args(args):
-    if len(args) == 0:
-        print """Usage: packager.py [OPTS] SPEC1 SPEC2 ... SPECn
-
-Options:
-
-  -n:  Just build the packages, don't publish them as a repo
-       or clean out the working directory
-
-Each SPEC is a mongodb version string optionally followed by a colon
-and some parameters, of the form <paramname>=<value>.  Supported
-parameters:
-
-  suffix -- suffix to append to the package's base name.  (If
-            unsupplied, suffixes default based on the parity of the
-            middle number in the version.)
-
-  revision -- least-order version number to packaging systems
-"""
-        sys.exit(0)
-
-    try:
-        (flags, args) = getopt.getopt(args, "n")
-    except getopt.GetoptError, err:
-        print str(err)
-        sys.exit(2)
-    flags=dict(flags)
-    specs=[Spec(arg) for arg in args]
-    return (flags, specs)
 
 def crossproduct(*seqs):
     """A generator for iterating all the tuples consisting of elements
@@ -337,6 +303,12 @@ def ensure_dir(filename):
             raise exc
     return filename
 
+def is_valid_file(parser, filename):
+    """Check if file exists, and return the filename"""
+    if not os.path.exists(filename):
+        parser.error("The file %s does not exist!" % arg)
+    else:
+        return filename
 
 def tarfile(build_os, arch, spec):
     """Return the location where we store the downloaded tarball for
@@ -386,7 +358,7 @@ def make_package(distro, build_os, arch, spec, srcdir):
     for pkgdir in ["debian", "rpm"]:
         print "Copying packaging files from %s to %s" % ("%s/%s" % (srcdir, pkgdir), sdir)
         # FIXME: sh-dash-cee is bad. See if tarfile can do this.
-        sysassert(["sh", "-c", "(cd \"%s\" && git archive r%s %s/ ) | (cd \"%s\" && tar xvf -)" % (srcdir, spec.version(), pkgdir, sdir)])
+        sysassert(["sh", "-c", "(cd \"%s\" && git archive %s %s/ ) | (cd \"%s\" && tar xvf -)" % (srcdir, spec.metadata_gitspec(), pkgdir, sdir)])
     # Splat the binaries and snmp files under sdir.  The "build" stages of the
     # packaging infrastructure will move the files to wherever they
     # need to go.
@@ -665,6 +637,7 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
     finally:
         os.chdir(oldcwd)
     # Do the build.
+    flags.append("-D", "version=" + spec.version())
     sysassert(["rpmbuild", "-ba", "--target", distro_arch] + flags + ["%s/SPECS/mongodb%s.spec" % (topdir, suffix)])
     r=distro.repodir(arch, build_os, spec)
     ensure_dir(r)
