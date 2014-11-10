@@ -1,6 +1,6 @@
 %define name    mongodb
-%define version %{version}
-%define release %{release}
+%define version %{dynamic_version}
+%define release %{dynamic_release}
 
 Name:    %{name}
 Version: %{version}
