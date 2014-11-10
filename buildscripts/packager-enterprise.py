@@ -49,16 +49,19 @@ DEFAULT_DISTROS=["suse", "debian","redhat","ubuntu"]
 
 
 class Spec(object):
-    def __init__(self, ver):
+    def __init__(self, ver, gitspec = None, rel = None):
         self.ver = ver
+        self.gitspec = gitspec
+        self.rel = rel
 
     def version(self):
         return self.ver
 
     def metadata_gitspec(self):
-        """Git revision to use for spec+control+init+manpage files"""
-        if(self.metadata_gitspec):
-          return self.metadata_gitspec
+        """Git revision to use for spec+control+init+manpage files.
+           The default is the release tag for the version being packaged."""
+        if(self.gitspec):
+          return self.gitspec
         else:
           return 'r' + self.version()
 
@@ -69,6 +72,25 @@ class Spec(object):
 
     def suffix(self):
         return "-enterprise" if int(self.ver.split(".")[1])%2==0 else "-enterprise-unstable"
+
+    def prelease(self):
+      # "N" is either passed in on the command line, or "1"
+      #
+      # 1) Standard release - "N" 
+      # 2) Nightly (snapshot) - "0.N.YYYYMMDDlatest"
+      # 3) RC's - "0.N.rcX"
+      if self.rel:
+        corenum = self.rel
+      else:
+        corenum = 1
+      # RC's
+      if re.search("-rc\d+$", self.version()):
+        return "0.%s.%s" % (corenum, re.sub('.*-','',self.version()))
+      # Nightlies
+      elif re.search("-$", self.version()):
+        return "0.%s.%s" % (corenum, time.strftime("%Y%m%d"))
+      else:
+        return corenum
 
     def pversion(self, distro):
         # Note: Debian packages have funny rules about dashes in
@@ -81,6 +103,8 @@ class Spec(object):
             return re.sub("\\d+-", "", self.ver)
         else:
             raise Exception("BUG: unsupported platform?")
+
+
 
     def param(self, param):
         if param in self.params:
@@ -214,6 +238,7 @@ def main(argv):
     parser = argparse.ArgumentParser(description='Build MongoDB Packages')
     parser.add_argument("-s", "--server-version", help="Server version to build (e.g. 2.7.8-rc0)")
     parser.add_argument("-m", "--metadata-gitspec", help="Gitspec to use for package metadata files", required=False)
+    parser.add_argument("-r", "--release-number", help="RPM release number base", type=int, required=False)
     parser.add_argument("-d", "--distros", help="Distros to build for", choices=DEFAULT_DISTROS, required=False, action='append')
     parser.add_argument("-a", "--arches", help="Architecture to build", choices=DEFAULT_ARCHES, required=False, action='append')
     parser.add_argument("-t", "--tarball", help="Local tarball to package instead of downloading (only valid with one distro/arch combination)", required=False, type=lambda x: is_valid_file(parser, x))
@@ -225,7 +250,7 @@ def main(argv):
 
     distros=[Distro(distro) for distro in args.distros]
 
-    spec = Spec(args.server_version)
+    spec = Spec(args.server_version, args.metadata_gitspec, args.release_number)
 
     oldcwd=os.getcwd()
     srcdir=oldcwd+"/../"
@@ -562,7 +587,7 @@ def write_debian_changelog(path, spec, srcdir):
 
 """ % (spec.suffix(), spec.pversion(Distro("debian")), spec.param("revision"), time.strftime("%a, %d %b %Y %H:%m:%S %z"))
     try:
-        s=preamble+backtick(["sh", "-c", "git archive r%s debian/changelog | tar xOf -" % spec.version()])
+        s=preamble+backtick(["sh", "-c", "git archive %s debian/changelog | tar xOf -" % spec.metadata_gitspec()])
     finally:
         os.chdir(oldcwd)
     f=open(path, 'w')
@@ -637,7 +662,7 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
     finally:
         os.chdir(oldcwd)
     # Do the build.
-    flags.append("-D", "version=" + spec.version())
+    flags.extend(["-D", "dynamic_version " + spec.pversion(distro), "-D", "dynamic_release " + spec.prelease()])
     sysassert(["rpmbuild", "-ba", "--target", distro_arch] + flags + ["%s/SPECS/mongodb%s.spec" % (topdir, suffix)])
     r=distro.repodir(arch, build_os, spec)
     ensure_dir(r)
