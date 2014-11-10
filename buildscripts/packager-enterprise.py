@@ -45,7 +45,7 @@ import argparse
 DEFAULT_ARCHES=["x86_64"]
 
 # Made up names for the flavors of distribution we package for.
-DEFAULT_DISTROS=["suse", "debian","redhat","ubuntu"]
+DISTROS=["suse", "debian","redhat","ubuntu"]
 
 
 class Spec(object):
@@ -90,7 +90,7 @@ class Spec(object):
       elif re.search("-$", self.version()):
         return "0.%s.%s" % (corenum, time.strftime("%Y%m%d"))
       else:
-        return corenum
+        return str(corenum)
 
     def pversion(self, distro):
         # Note: Debian packages have funny rules about dashes in
@@ -235,11 +235,19 @@ class Distro(object):
         print """Usage: packager.py --server-version <version> [ --metadata-gitspec <gitspec> ] [ --distro <distro>[,<distro> ...] ] [ --arch <arch>[,<arch ...] ] [ --tarball <path to tarball> ]"""
 
 def main(argv):
+
+    # --distros must be "build_os" value, not actual distro name ("ubuntu1404" vs. "ubuntu")
+    #
+    distros=[Distro(distro) for distro in DISTROS]
+    DISTRO_CHOICES=[]
+    for distro in distros:
+      DISTRO_CHOICES.extend(distro.build_os())
+
     parser = argparse.ArgumentParser(description='Build MongoDB Packages')
     parser.add_argument("-s", "--server-version", help="Server version to build (e.g. 2.7.8-rc0)")
     parser.add_argument("-m", "--metadata-gitspec", help="Gitspec to use for package metadata files", required=False)
     parser.add_argument("-r", "--release-number", help="RPM release number base", type=int, required=False)
-    parser.add_argument("-d", "--distros", help="Distros to build for", choices=DEFAULT_DISTROS, required=False, action='append')
+    parser.add_argument("-d", "--distros", help="Distros to build for", choices=DISTRO_CHOICES, required=False, action='append')
     parser.add_argument("-a", "--arches", help="Architecture to build", choices=DEFAULT_ARCHES, required=False, action='append')
     parser.add_argument("-t", "--tarball", help="Local tarball to package instead of downloading (only valid with one distro/arch combination)", required=False, type=lambda x: is_valid_file(parser, x))
     args = parser.parse_args()
@@ -247,8 +255,6 @@ def main(argv):
     if len(args.distros) * len(args.arches) > 1 and args.tarball:
       parser.error("Can only specify local tarball with one distro/arch combination")
 
-
-    distros=[Distro(distro) for distro in args.distros]
 
     spec = Spec(args.server_version, args.metadata_gitspec, args.release_number)
 
@@ -270,16 +276,17 @@ def main(argv):
       for (distro, arch) in crossproduct(distros, args.arches):
 
           for build_os in distro.build_os():
+            if build_os in args.distros:
 
-            if args.tarball:
-              filename = tarfile(build_os, arch, spec)
-              ensure_dir(filename)
-              shutil.copyfile(args.tarball,filename)
-            else:
-              httpget(urlfmt % (arch, build_os, spec.version()), ensure_dir(tarfile(build_os, arch, spec)))
+              if args.tarball:
+                filename = tarfile(build_os, arch, spec)
+                ensure_dir(filename)
+                shutil.copyfile(args.tarball,filename)
+              else:
+                httpget(urlfmt % (arch, build_os, spec.version()), ensure_dir(tarfile(build_os, arch, spec)))
 
-            repo = make_package(distro, build_os, arch, spec, srcdir)
-            make_repo(repo, distro, build_os, spec)
+              repo = make_package(distro, build_os, arch, spec, srcdir)
+              make_repo(repo, distro, build_os, spec)
 
     finally:
         os.chdir(oldcwd)
