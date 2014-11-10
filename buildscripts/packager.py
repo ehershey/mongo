@@ -27,11 +27,13 @@
 # echo "Now put the dist gnupg signing keys in ~root/.gnupg"
 #
 
+import argparse
 import errno
 import getopt
 import httplib2
 import os
 import re
+import shutil
 import stat
 import subprocess
 import sys
@@ -39,17 +41,11 @@ import tempfile
 import time
 import urlparse
 
-# For the moment, this program runs on the host that also serves our
-# repositories to the world, so the last thing the program does is
-# move the repositories into place.  Make this be the path where the
-# web server will look for repositories.
-REPOPATH="/var/www/repo"
-
 # The MongoDB names for the architectures we support.
-ARCHES=["i686", "x86_64"]
+DEFAULT_ARCHES=["i686", "x86_64"]
 
 # Made up names for the flavors of distribution we package for.
-DISTROS=["suse", "debian-sysvinit", "ubuntu-upstart", "redhat"]
+DEFAULT_DISTROS=["suse", "debian-sysvinit", "ubuntu-upstart", "redhat"]
 
 # When we're preparing a directory containing packaging tool inputs
 # and our binaries, use this relative subdirectory for placing the
@@ -57,38 +53,48 @@ DISTROS=["suse", "debian-sysvinit", "ubuntu-upstart", "redhat"]
 BINARYDIR="BINARIES"
 
 class Spec(object):
-    def __init__(self, specstr):
-        tup = specstr.split(":")
-        self.ver = tup[0]
-        # Hack: the second item in the tuple is treated as a suffix if
-        # it lacks an equals sign; otherwise it's the start of named
-        # parameters.
-        self.suf = None
-        if len(tup) > 1 and tup[1].find("=") == -1:
-            self.suf = tup[1]
-        # Catch-all for any other parameters to the packaging.
-        i = 2 if self.suf else 1
-        self.params = dict([s.split("=") for s in tup[i:]])
-        for key in self.params.keys():
-            assert(key in ["suffix", "revision"])
+    def __init__(self, ver, gitspec = None, rel = None):
+        self.ver = ver
+        self.gitspec = gitspec
+        self.rel = rel
 
     def version(self):
         return self.ver
 
+    def metadata_gitspec(self):
+        """Git revision to use for spec+control+init+manpage files.
+           The default is the release tag for the version being packaged."""
+        if(self.gitspec):
+            return self.gitspec
+        else:
+            return 'r' + self.version()
+       
     def version_better_than(self, version_string):
         # FIXME: this is wrong, but I'm in a hurry.
         # e.g., "1.8.2" < "1.8.10", "1.8.2" < "1.8.2-rc1"
         return self.ver > version_string
 
     def suffix(self):
-        # suffix is what we tack on after pkgbase.
-        if self.suf:
-            return self.suf
-        elif "suffix" in self.params:
-            return self.params["suffix"]
-        else:
-            return "-org" if int(self.ver.split(".")[1])%2==0 else "-org-unstable"
+        return "-org" if int(self.ver.split(".")[1])%2==0 else "-org-unstable"
 
+    def prelease(self):
+      # "N" is either passed in on the command line, or "1"
+      #
+      # 1) Standard release - "N" 
+      # 2) Nightly (snapshot) - "0.N.YYYYMMDDlatest"
+      # 3) RC's - "0.N.rcX"
+      if self.rel:
+        corenum = self.rel
+      else:
+        corenum = 1
+      # RC's
+      if re.search("-rc\d+$", self.version()):
+        return "0.%s.%s" % (corenum, re.sub('.*-','',self.version()))
+      # Nightlies
+      elif re.search("-$", self.version()):
+        return "0.%s.%s" % (corenum, time.strftime("%Y%m%d"))
+      else:
+        return str(corenum)
 
     def pversion(self, distro):
         # Note: Debian packages have funny rules about dashes in
@@ -98,14 +104,9 @@ class Spec(object):
         if re.search("^(debian|ubuntu)", distro.name()):
             return re.sub("-", "~", self.ver)                
         elif re.search("(suse|redhat|fedora|centos)", distro.name()):
-            return re.sub("\\d+-", "", self.ver)
+            return re.sub("-.*", "", self.ver)
         else:
             raise Exception("BUG: unsupported platform?")
-
-    def param(self, param):
-        if param in self.params:
-            return self.params[param]
-        return None
 
 class Distro(object):
     def __init__(self, string):
@@ -149,8 +150,20 @@ class Distro(object):
             raise Exception("BUG: unsupported platform?")
 
 def main(argv):
-    (flags, specs) = parse_args(argv[1:])
-    distros=[Distro(distro) for distro in DISTROS]
+
+    parser = argparse.ArgumentParser(description='Build MongoDB Packages')
+    parser.add_argument("-s", "--server-version", help="Server version to build (e.g. 2.7.8-rc0)")
+    parser.add_argument("-m", "--metadata-gitspec", help="Gitspec to use for package metadata files", required=False)
+    parser.add_argument("-r", "--release-number", help="RPM release number base", type=int, required=False)
+    parser.add_argument("-d", "--distros", help="Distros to build for", choices=DEFAULT_DISTROS, required=False, default=DEFAULT_DISTROS, action='append')
+    parser.add_argument("-a", "--arches", help="Architecture to build", choices=DEFAULT_ARCHES, default=DEFAULT_ARCHES, required=False, action='append')
+    parser.add_argument("-t", "--tarball", help="Local tarball to package instead of downloading (only valid with one distro/arch combination)", required=False, type=lambda x: is_valid_file(parser, x))
+    args = parser.parse_args()
+
+    if len(args.distros) * len(args.arches) > 1 and args.tarball:
+      parser.error("Can only specify local tarball with one distro/arch combination")
+
+    spec = Spec(args.server_version, args.metadata_gitspec, args.release_number)
 
     oldcwd=os.getcwd()
     srcdir=oldcwd+"/../"
@@ -160,66 +173,25 @@ def main(argv):
     prefix=tempfile.mkdtemp()
     print "Working in directory %s" % prefix
 
-    # This will be a list of directories where we put packages in
-    # "repository layout".
-    repos=[]
+    distros=[Distro(distro) for distro in args.distros]
 
     os.chdir(prefix)
     try:
         # Download the binaries.
         urlfmt="http://fastdl.mongodb.org/linux/mongodb-linux-%s-%s.tgz"
-        for (spec, arch) in crossproduct(specs, ARCHES):
-            httpget(urlfmt % (arch, spec.version()), ensure_dir(tarfile(arch, spec)))
-    
-        # Build a pacakge for each distro/spec/arch tuple, and
-        # accumulate the repository-layout directories.
-        for (distro, spec, arch) in crossproduct(distros, specs, ARCHES):
-            repos.append(make_package(distro, arch, spec, srcdir))
-    
-        # Build the repos' metadatas.
-        for repo in set(repos):
-            print repo
+        for (distro, arch) in crossproduct(distros, args.arches):
+            if args.tarball:
+                filename = tarfile(arch, spec)
+                ensure_dir(filename)
+                shutil.copyfile(args.tarball,filename)
+            else:
+                httpget(urlfmt % (arch, spec.version()), ensure_dir(tarfile(arch, spec)))
+
+            repo = make_package(distro, arch, spec, srcdir)
             make_repo(repo)
     
     finally:
         os.chdir(oldcwd)
-    if "-n" not in flags:
-        move_repos_into_place(prefix+"/repo", REPOPATH)
-        # FIXME: try shutil.rmtree some day.
-        sysassert(["rm", "-rv", prefix])
-
-def parse_args(args):
-    if len(args) == 0:
-        print """Usage: packager.py [OPTS] SPEC1 SPEC2 ... SPECn
-
-Example:
-    packager.py 2.6.4
-
-Options:
-
-  -n:  Just build the packages, don't publish them as a repo 
-       or clean out the working directory
-
-Each SPEC is a mongodb version string optionally followed by a colon
-and some parameters, of the form <paramname>=<value>.  Supported
-parameters:
-
-  suffix -- suffix to append to the package's base name.  (If
-            unsupplied, suffixes default based on the parity of the
-            middle number in the version.)
-
-  revision -- least-order version number to packaging systems
-"""
-        sys.exit(0)
-
-    try:
-        (flags, args) = getopt.getopt(args, "n")
-    except getopt.GetoptError, err:
-        print str(err)
-        sys.exit(2)
-    flags=dict(flags)
-    specs=[Spec(arg) for arg in args]
-    return (flags, specs)
 
 def crossproduct(*seqs):
     """A generator for iterating all the tuples consisting of elements
@@ -250,20 +222,6 @@ def backtick(argv):
     sys.stdout.flush()
     sys.stderr.flush()
     return subprocess.Popen(argv, stdout=subprocess.PIPE).communicate()[0]
-
-def ensure_dir(filename):
-    """Make sure that the directory that's the dirname part of
-    filename exists, and return filename."""
-    dirpart = os.path.dirname(filename)
-    try:
-        os.makedirs(dirpart)
-    except OSError: # as exc: # Python >2.5
-        exc=sys.exc_value
-        if exc.errno == errno.EEXIST:
-            pass
-        else: 
-            raise exc
-    return filename
 
 
 def tarfile(arch, spec):
@@ -335,7 +293,7 @@ def make_package(distro, arch, spec, srcdir):
     for pkgdir in ["debian", "rpm"]:
         print "Copying packaging files from %s to %s" % ("%s/%s" % (srcdir, pkgdir), sdir)
         # FIXME: sh-dash-cee is bad. See if tarfile can do this.
-        sysassert(["sh", "-c", "(cd \"%s\" && git archive r%s %s/ ) | (cd \"%s\" && tar xvf -)" % (srcdir, spec.version(), pkgdir, sdir)])
+        sysassert(["sh", "-c", "(cd \"%s\" && git archive %s %s/ ) | (cd \"%s\" && tar xvf -)" % (srcdir, spec.metadata_gitspec(), pkgdir, sdir)])
     # Splat the binaries under sdir.  The "build" stages of the
     # packaging infrastructure will move the binaries to wherever they
     # need to go.  
@@ -396,8 +354,6 @@ def make_deb(distro, arch, spec, srcdir):
     ensure_dir(r)
     # FIXME: see if shutil.copyfile or something can do this without
     # much pain.
-    # sysassert(["cp", "-v", sdir+"../%s%s_%s%s_%s.deb"%(distro.pkgbase(), suffix, spec.pversion(distro), "-"+spec.param("revision") if spec.param("revision") else"", distro_arch), r])
-    # sysassert(["cp", "-v", sdir+"../*.deb", r])
     sysassert(["sh", "-c", "cp -v \"%s/../\"*.deb \"%s\""%(sdir, r)])
     return r
 
@@ -532,16 +488,8 @@ def write_debian_changelog(path, spec, srcdir):
     oldcwd=os.getcwd()
     os.chdir(srcdir)
     preamble=""
-    if spec.param("revision"):
-        preamble="""mongodb%s (%s-%s) unstable; urgency=low
-
-  * Bump revision number
-
- -- Richard Kreuter <richard@10gen.com>  %s
-
-""" % (spec.suffix(), spec.pversion(Distro("debian")), spec.param("revision"), time.strftime("%a, %d %b %Y %H:%m:%S %z"))
     try:
-        s=preamble+backtick(["sh", "-c", "git archive r%s debian/changelog | tar xOf -" % spec.version()])
+        s=preamble+backtick(["sh", "-c", "git archive %s debian/changelog | tar xOf -" % spec.metadata_gitspec()])
     finally:
         os.chdir(oldcwd)
     f=open(path, 'w')
@@ -614,6 +562,7 @@ def make_rpm(distro, arch, spec, srcdir):
     finally:
         os.chdir(oldcwd)
     # Do the build.
+    flags.extend(["-D", "dynamic_version " + spec.pversion(distro), "-D", "dynamic_release " + spec.prelease()])
     sysassert(["rpmbuild", "-ba", "--target", distro_arch] + flags + ["%s/SPECS/mongodb%s.spec" % (topdir, suffix)])
     r=distro.repodir(arch)
     ensure_dir(r)
@@ -645,5 +594,28 @@ def write_rpm_macros_file(path, topdir):
     finally:
         f.close()
 
+def ensure_dir(filename):
+    """Make sure that the directory that's the dirname part of
+    filename exists, and return filename."""
+    dirpart = os.path.dirname(filename)
+    try:
+        os.makedirs(dirpart)
+    except OSError: # as exc: # Python >2.5
+        exc=sys.exc_value
+        if exc.errno == errno.EEXIST:
+            pass
+        else:
+            raise exc
+    return filename
+
+def is_valid_file(parser, filename):
+    """Check if file exists, and return the filename"""
+    if not os.path.exists(filename):
+        parser.error("The file %s does not exist!" % arg)
+    else:
+        return filename
+
+
 if __name__ == "__main__":
     main(sys.argv)
+
