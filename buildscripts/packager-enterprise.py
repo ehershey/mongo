@@ -26,6 +26,7 @@
 # apt-get install dpkg-dev rpm debhelper fakeroot ia32-libs createrepo git-core libsnmp15
 # echo "Now put the dist gnupg signing keys in ~root/.gnupg"
 
+import argparse
 import errno
 import getopt
 from glob import glob
@@ -39,7 +40,6 @@ import sys
 import tempfile
 import time
 import urlparse
-import argparse
 
 # The MongoDB names for the architectures we support.
 DEFAULT_ARCHES=["x86_64"]
