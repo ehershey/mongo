@@ -30,7 +30,7 @@ import argparse
 import errno
 import getopt
 from glob import glob
-from packager import httpget
+from packager import httpget, is_valid_file, ensure_dir
 import os
 import re
 import shutil
@@ -311,27 +311,6 @@ def backtick(argv):
     sys.stdout.flush()
     sys.stderr.flush()
     return subprocess.Popen(argv, stdout=subprocess.PIPE).communicate()[0]
-
-def ensure_dir(filename):
-    """Make sure that the directory that's the dirname part of
-    filename exists, and return filename."""
-    dirpart = os.path.dirname(filename)
-    try:
-        os.makedirs(dirpart)
-    except OSError: # as exc: # Python >2.5
-        exc=sys.exc_value
-        if exc.errno == errno.EEXIST:
-            pass
-        else:
-            raise exc
-    return filename
-
-def is_valid_file(parser, filename):
-    """Check if file exists, and return the filename"""
-    if not os.path.exists(filename):
-        parser.error("The file %s does not exist!" % arg)
-    else:
-        return filename
 
 def tarfile(build_os, arch, spec):
     """Return the location where we store the downloaded tarball for
