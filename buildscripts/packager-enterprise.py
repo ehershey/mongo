@@ -104,7 +104,6 @@ class Spec(object):
         else:
             raise Exception("BUG: unsupported platform?")
 
-
     def branch(self):
         """Return the major and minor portions of the specified version.
         For example, if the version is "2.5.5" the branch would be "2.5"
@@ -225,8 +224,6 @@ class Distro(object):
         "el6" for rhel 6.x, return anything else unchanged"""
 
         return re.sub(r'^rh(el\d).*$', r'\1', build_os)
-
-        print """Usage: packager.py --server-version <version> [ --metadata-gitspec <gitspec> ] [ --distro <distro>[,<distro> ...] ] [ --arch <arch>[,<arch ...] ] [ --tarball <path to tarball> ]"""
 
 def main(argv):
 
