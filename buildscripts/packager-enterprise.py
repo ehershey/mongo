@@ -100,16 +100,10 @@ class Spec(object):
         if re.search("^(debian|ubuntu)", distro.name()):
             return re.sub("-", "~", self.ver)
         elif re.search("(suse|redhat|fedora|centos)", distro.name()):
-            return re.sub("\\d+-", "", self.ver)
+            return re.sub("-.*", "", self.ver)
         else:
             raise Exception("BUG: unsupported platform?")
 
-
-
-    def param(self, param):
-        if param in self.params:
-            return self.params[param]
-        return None
 
     def branch(self):
         """Return the major and minor portions of the specified version.
@@ -247,8 +241,8 @@ def main(argv):
     parser.add_argument("-s", "--server-version", help="Server version to build (e.g. 2.7.8-rc0)")
     parser.add_argument("-m", "--metadata-gitspec", help="Gitspec to use for package metadata files", required=False)
     parser.add_argument("-r", "--release-number", help="RPM release number base", type=int, required=False)
-    parser.add_argument("-d", "--distros", help="Distros to build for", choices=DISTRO_CHOICES, required=False, action='append')
-    parser.add_argument("-a", "--arches", help="Architecture to build", choices=DEFAULT_ARCHES, required=False, action='append')
+    parser.add_argument("-d", "--distros", help="Distros to build for", choices=DISTRO_CHOICES, required=False, default=[], action='append')
+    parser.add_argument("-a", "--arches", help="Architecture to build", choices=DEFAULT_ARCHES, default=DEFAULT_ARCHES, required=False, action='append')
     parser.add_argument("-t", "--tarball", help="Local tarball to package instead of downloading (only valid with one distro/arch combination)", required=False, type=lambda x: is_valid_file(parser, x))
     args = parser.parse_args()
 
@@ -276,7 +270,7 @@ def main(argv):
       for (distro, arch) in crossproduct(distros, args.arches):
 
           for build_os in distro.build_os():
-            if build_os in args.distros:
+            if build_os in args.distros or not args.distros:
 
               if args.tarball:
                 filename = tarfile(build_os, arch, spec)
@@ -452,7 +446,6 @@ def make_deb(distro, build_os, arch, spec, srcdir):
     ensure_dir(r)
     # FIXME: see if shutil.copyfile or something can do this without
     # much pain.
-    #sysassert(["cp", "-v", sdir+"../%s%s_%s%s_%s.deb"%(distro.pkgbase(), suffix, spec.pversion(distro), "-"+spec.param("revision") if spec.param("revision") else"", distro_arch), r])
     sysassert(["sh", "-c", "cp -v \"%s/../\"*.deb \"%s\""%(sdir, r)])
     return r
 
@@ -585,14 +578,6 @@ def write_debian_changelog(path, spec, srcdir):
     oldcwd=os.getcwd()
     os.chdir(srcdir)
     preamble=""
-    if spec.param("revision"):
-        preamble="""mongodb%s (%s-%s) unstable; urgency=low
-
-  * Bump revision number
-
- -- Richard Kreuter <richard@10gen.com>  %s
-
-""" % (spec.suffix(), spec.pversion(Distro("debian")), spec.param("revision"), time.strftime("%a, %d %b %Y %H:%m:%S %z"))
     try:
         s=preamble+backtick(["sh", "-c", "git archive %s debian/changelog | tar xOf -" % spec.metadata_gitspec()])
     finally:
