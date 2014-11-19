@@ -30,7 +30,7 @@ import argparse
 import errno
 import getopt
 from glob import glob
-from packager import httpget, is_valid_file, ensure_dir
+from packager import httpget, is_valid_file, ensure_dir, backtick, sysassert, crossproduct
 import os
 import re
 import shutil
@@ -281,36 +281,6 @@ def main(argv):
 
     finally:
         os.chdir(oldcwd)
-
-def crossproduct(*seqs):
-    """A generator for iterating all the tuples consisting of elements
-    of seqs."""
-    l = len(seqs)
-    if l == 0:
-        pass
-    elif l == 1:
-        for i in seqs[0]:
-            yield [i]
-    else:
-        for lst in crossproduct(*seqs[:-1]):
-            for i in seqs[-1]:
-                lst2=list(lst)
-                lst2.append(i)
-                yield lst2
-
-def sysassert(argv):
-    """Run argv and assert that it exited with status 0."""
-    print "In %s, running %s" % (os.getcwd(), " ".join(argv))
-    sys.stdout.flush()
-    sys.stderr.flush()
-    assert(subprocess.Popen(argv).wait()==0)
-
-def backtick(argv):
-    """Run argv and return its output string."""
-    print "In %s, running %s" % (os.getcwd(), " ".join(argv))
-    sys.stdout.flush()
-    sys.stderr.flush()
-    return subprocess.Popen(argv, stdout=subprocess.PIPE).communicate()[0]
 
 def tarfile(build_os, arch, spec):
     """Return the location where we store the downloaded tarball for
