@@ -23,7 +23,7 @@
 # * Before you run the program on a new host, these are the
 # prerequisites:
 #
-# apt-get install dpkg-dev rpm debhelper fakeroot ia32-libs createrepo git-core libsnmp15
+# apt-get install dpkg-dev rpm debhelper fakeroot ia32-libs createrepo git-core
 # echo "Now put the dist gnupg signing keys in ~root/.gnupg"
 
 import argparse
@@ -45,7 +45,7 @@ import urlparse
 DEFAULT_ARCHES=["x86_64"]
 
 # Made up names for the flavors of distribution we package for.
-DISTROS=["suse", "debian","redhat","ubuntu"]
+DISTROS=["suse", "debian","redhat","ubuntu", "amazon"]
 
 
 class Spec(object):
@@ -71,7 +71,7 @@ class Spec(object):
         return self.ver > version_string
 
     def suffix(self):
-        return "-enterprise" if int(self.ver.split(".")[1])%2==0 else "-enterprise-unstable"
+        return "-ssl" if int(self.ver.split(".")[1])%2==0 else "-ssl-unstable"
 
     def prelease(self):
       # "N" is either passed in on the command line, or "1"
@@ -99,7 +99,7 @@ class Spec(object):
         # our upstream version too).
         if re.search("^(debian|ubuntu)", distro.name()):
             return re.sub("-", "~", self.ver)
-        elif re.search("(suse|redhat|fedora|centos)", distro.name()):
+        elif re.search("(suse|redhat|fedora|centos|amazon)", distro.name()):
             return re.sub("-.*", "", self.ver)
         else:
             raise Exception("BUG: unsupported platform?")
@@ -123,7 +123,7 @@ class Distro(object):
     def archname(self, arch):
         if re.search("^(debian|ubuntu)", self.n):
             return "i386" if arch.endswith("86") else "amd64"
-        elif re.search("^(suse|centos|redhat|fedora)", self.n):
+        elif re.search("^(suse|centos|redhat|fedora|amazon)", self.n):
             return "i686" if arch.endswith("86") else "x86_64"
         else:
             raise Exception("BUG: unsupported platform?")
@@ -136,29 +136,29 @@ class Distro(object):
 
         Examples:
 
-        repo/apt/ubuntu/dists/precise/mongodb-enterprise/2.5/multiverse/binary-amd64
-        repo/apt/ubuntu/dists/precise/mongodb-enterprise/2.5/multiverse/binary-i386
+        repo/apt/ubuntu/dists/precise/mongodb-ssl/2.5/multiverse/binary-amd64
+        repo/apt/ubuntu/dists/precise/mongodb-ssl/2.5/multiverse/binary-i386
 
-        repo/apt/ubuntu/dists/trusty/mongodb-enterprise/2.5/multiverse/binary-amd64
-        repo/apt/ubuntu/dists/trusty/mongodb-enterprise/2.5/multiverse/binary-i386
+        repo/apt/ubuntu/dists/trusty/mongodb-ssl/2.5/multiverse/binary-amd64
+        repo/apt/ubuntu/dists/trusty/mongodb-ssl/2.5/multiverse/binary-i386
 
-        repo/apt/debian/dists/wheezy/mongodb-enterprise/2.5/main/binary-amd64
-        repo/apt/debian/dists/wheezy/mongodb-enterprise/2.5/main/binary-i386
+        repo/apt/debian/dists/wheezy/mongodb-ssl/2.5/main/binary-amd64
+        repo/apt/debian/dists/wheezy/mongodb-ssl/2.5/main/binary-i386
 
-        repo/yum/redhat/6/mongodb-enterprise/2.5/x86_64
-        yum/redhat/6/mongodb-enterprise/2.5/i386
+        repo/yum/redhat/6/mongodb-ssl/2.5/x86_64
+        yum/redhat/6/mongodb-ssl/2.5/i386
 
-        repo/zypper/suse/11/mongodb-enterprise/2.5/x86_64
-        zypper/suse/11/mongodb-enterprise/2.5/i386
+        repo/zypper/suse/11/mongodb-ssl/2.5/x86_64
+        zypper/suse/11/mongodb-ssl/2.5/i386
 
         """
 
         if re.search("^(debian|ubuntu)", self.n):
-            return "repo/apt/%s/dists/%s/mongodb-enterprise/%s/%s/binary-%s/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.repo_component(), self.archname(arch))
-        elif re.search("(redhat|fedora|centos)", self.n):
-            return "repo/yum/%s/%s/mongodb-enterprise/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
+            return "repo/apt/%s/dists/%s/mongodb-ssl/%s/%s/binary-%s/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.repo_component(), self.archname(arch))
+        elif re.search("(redhat|fedora|centos|amazon)", self.n):
+            return "repo/yum/%s/%s/mongodb-ssl/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
         elif re.search("(suse)", self.n):
-            return "repo/zypper/%s/%s/mongodb-enterprise/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
+            return "repo/zypper/%s/%s/mongodb-ssl/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
         else:
             raise Exception("BUG: unsupported platform?")
 
@@ -175,11 +175,13 @@ class Distro(object):
     def repo_os_version(self, build_os):
         """Return an OS version suitable for package repo directory
         naming - e.g. 5, 6 or 7 for redhat/centos, "precise," "wheezy," etc.
-        for Ubuntu/Debian, 11 for suse"""
+        for Ubuntu/Debian, 11 for suse, "2013.03" for amazon"""
         if self.n == 'suse':
             return re.sub(r'^suse(\d+)$', r'\1', build_os)
         if self.n == 'redhat':
             return re.sub(r'^rhel(\d).*$', r'\1', build_os)
+        if self.n == 'amazon':
+            return "2013.03"
         elif self.n == 'ubuntu':
             if build_os == 'ubuntu1204':
                 return "precise"
@@ -198,7 +200,7 @@ class Distro(object):
     def make_pkg(self, build_os, arch, spec, srcdir):
         if re.search("^(debian|ubuntu)", self.n):
             return make_deb(self, build_os, arch, spec, srcdir)
-        elif re.search("^(suse|centos|redhat|fedora)", self.n):
+        elif re.search("^(suse|centos|redhat|fedora|amazon)", self.n):
             return make_rpm(self, build_os, arch, spec, srcdir)
         else:
             raise Exception("BUG: unsupported platform?")
@@ -210,8 +212,10 @@ class Distro(object):
 
         if re.search("(suse)", self.n):
             return [ "suse11" ]
-        if re.search("(redhat|fedora|centos)", self.n):
+        elif re.search("(redhat|fedora|centos)", self.n):
             return [ "rhel70", "rhel62", "rhel57" ]
+        elif self.n == 'amazon':
+            return [ "amazon" ]
         elif self.n == 'ubuntu':
             return [ "ubuntu1204", "ubuntu1404" ]
         elif self.n == 'debian':
@@ -223,7 +227,10 @@ class Distro(object):
         """Return the release distribution to use in the rpm - "el5" for rhel 5.x,
         "el6" for rhel 6.x, return anything else unchanged"""
 
-        return re.sub(r'^rh(el\d).*$', r'\1', build_os)
+        if self.n == 'amazon':
+          return 'amzn1'
+        else:
+          return re.sub(r'^rh(el\d).*$', r'\1', build_os)
 
 def main(argv):
 
@@ -260,7 +267,7 @@ def main(argv):
     os.chdir(prefix)
     try:
       # Download the binaries.
-      urlfmt="http://downloads.mongodb.com/linux/mongodb-linux-%s-enterprise-%s-%s.tgz"
+      urlfmt="http://downloads.mongodb.org/linux/mongodb-linux-%s-%s-%s.tgz"
 
       # Build a package for each distro/spec/arch tuple, and
       # accumulate the repository-layout directories.
@@ -285,15 +292,15 @@ def main(argv):
 def tarfile(build_os, arch, spec):
     """Return the location where we store the downloaded tarball for
     this package"""
-    return "dl/mongodb-linux-%s-enterprise-%s-%s.tar.gz" % (spec.version(), build_os, arch)
+    return "dl/mongodb-linux-%s-%s-%s.tar.gz" % (spec.version(), build_os, arch)
 
 def setupdir(distro, build_os, arch, spec):
     # The setupdir will be a directory containing all inputs to the
     # distro's packaging tools (e.g., package metadata files, init
     # scripts, etc), along with the already-built binaries).  In case
     # the following format string is unclear, an example setupdir
-    # would be dst/x86_64/debian-sysvinit/wheezy/mongodb-org-unstable/
-    # or dst/x86_64/redhat/rhel57/mongodb-org-unstable/
+    # would be dst/x86_64/debian-sysvinit/wheezy/mongodb-ssl-unstable/
+    # or dst/x86_64/redhat/rhel57/mongodb-ssl-unstable/
     return "dst/%s/%s/%s/%s%s-%s/" % (arch, distro.name(), build_os, distro.pkgbase(), spec.suffix(), spec.pversion(distro))
 
 def unpack_binaries_into(build_os, arch, spec, where):
@@ -306,9 +313,10 @@ def unpack_binaries_into(build_os, arch, spec, where):
     # thing and chdir into where and run tar there.
     os.chdir(where)
     try:
-	sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec)])
-    	release_dir = glob('mongodb-linux-*')[0]
-        for releasefile in "bin", "snmp", "LICENSE.txt", "README", "THIRD-PARTY-NOTICES":
+        sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec)])
+        release_dir = glob('mongodb-linux-*')[0]
+        for releasefile in "bin", "GNU-AGPL-3.0", "README", "THIRD-PARTY-NOTICES":
+            print "moving file: %s/%s" % (release_dir, releasefile)
             os.rename("%s/%s" % (release_dir, releasefile), releasefile)
         os.rmdir(release_dir)
     except Exception:
@@ -331,7 +339,7 @@ def make_package(distro, build_os, arch, spec, srcdir):
         print "Copying packaging files from %s to %s" % ("%s/%s" % (srcdir, pkgdir), sdir)
         # FIXME: sh-dash-cee is bad. See if tarfile can do this.
         sysassert(["sh", "-c", "(cd \"%s\" && git archive %s %s/ ) | (cd \"%s\" && tar xvf -)" % (srcdir, spec.metadata_gitspec(), pkgdir, sdir)])
-    # Splat the binaries and snmp files under sdir.  The "build" stages of the
+    # Splat the binaries under sdir.  The "build" stages of the
     # packaging infrastructure will move the files to wherever they
     # need to go.
     unpack_binaries_into(build_os, arch, spec, sdir)
@@ -345,7 +353,7 @@ def make_package(distro, build_os, arch, spec, srcdir):
 def make_repo(repodir, distro, build_os, spec):
     if re.search("(debian|ubuntu)", repodir):
         make_deb_repo(repodir, distro, build_os, spec)
-    elif re.search("(suse|centos|redhat|fedora)", repodir):
+    elif re.search("(suse|centos|redhat|fedora|amazon)", repodir):
         make_rpm_repo(repodir)
     else:
         raise Exception("BUG: unsupported platform?")
@@ -423,7 +431,7 @@ def make_deb_repo(repo, distro, build_os, spec):
     s="""Origin: mongodb
 Label: mongodb
 Suite: mongodb
-Codename: %s/mongodb-enterprise
+Codename: %s/mongodb-ssl
 Architectures: amd64
 Components: %s
 Description: MongoDB packages

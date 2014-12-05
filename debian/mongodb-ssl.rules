@@ -21,15 +21,15 @@ build-stamp: configure-stamp
 	# THE FOLLOWING LINE IS INTENTIONALLY COMMENTED. 
 	# scons 
 	#docbook-to-man debian/mongodb.sgml > mongodb.1
-	echo -n > debian/mongodb-enterprise-tools.manpages
+	echo -n > debian/mongodb-ssl-tools.manpages
 	for binary in ${TOOLS} ; \
 	do \
-	  echo debian/$$binary.1 >> debian/mongodb-enterprise-tools.manpages ; \
+	  echo debian/$$binary.1 >> debian/mongodb-ssl-tools.manpages ; \
 	done
 
-	echo debian/mongo.1 > debian/mongodb-enterprise-shell.manpages
-	echo debian/mongod.1 > debian/mongodb-enterprise-server.manpages
-	echo debian/mongos.1 > debian/mongodb-enterprise-mongos.manpages
+	echo debian/mongo.1 > debian/mongodb-ssl-shell.manpages
+	echo debian/mongod.1 > debian/mongodb-ssl-server.manpages
+	echo debian/mongos.1 > debian/mongodb-ssl-mongos.manpages
 
 	touch $@
 
@@ -44,11 +44,11 @@ clean:
 
 	rm -f debian/*.manpages
 
-	rm -rf $(CURDIR)/debian/mongodb-enterprise
-	rm -rf $(CURDIR)/debian/mongodb-enterprise-shell
-	rm -rf $(CURDIR)/debian/mongodb-enterprise-server
-	rm -rf $(CURDIR)/debian/mongodb-enterprise-mongos
-	rm -rf $(CURDIR)/debian/mongodb-enterprise-tools
+	rm -rf $(CURDIR)/debian/mongodb-ssl
+	rm -rf $(CURDIR)/debian/mongodb-ssl-shell
+	rm -rf $(CURDIR)/debian/mongodb-ssl-server
+	rm -rf $(CURDIR)/debian/mongodb-ssl-mongos
+	rm -rf $(CURDIR)/debian/mongodb-ssl-tools
 	rm -f config.log
 	rm -f mongo
 	rm -f mongod
@@ -76,30 +76,30 @@ install: build
 
 	# THE FOLLOWING LINE IS INTENTIONALLY COMMENTED.
 	# scons --prefix=$(CURDIR)/debian/mongodb/usr install
-	mkdir -p $(CURDIR)/debian/mongodb-enterprise-shell/usr/bin
-	mkdir -p $(CURDIR)/debian/mongodb-enterprise-server/usr/bin
-	mkdir -p $(CURDIR)/debian/mongodb-enterprise-mongos/usr/bin
-	mkdir -p $(CURDIR)/debian/mongodb-enterprise-tools/usr/bin
-	cp -v $(CURDIR)/bin/mongo $(CURDIR)/debian/mongodb-enterprise-shell/usr/bin
-	cp -v $(CURDIR)/bin/mongod $(CURDIR)/debian/mongodb-enterprise-server/usr/bin
-	cp -v $(CURDIR)/bin/mongos $(CURDIR)/debian/mongodb-enterprise-mongos/usr/bin
+	mkdir -p $(CURDIR)/debian/mongodb-ssl-shell/usr/bin
+	mkdir -p $(CURDIR)/debian/mongodb-ssl-server/usr/bin
+	mkdir -p $(CURDIR)/debian/mongodb-ssl-mongos/usr/bin
+	mkdir -p $(CURDIR)/debian/mongodb-ssl-tools/usr/bin
+	cp -v $(CURDIR)/bin/mongo $(CURDIR)/debian/mongodb-ssl-shell/usr/bin
+	cp -v $(CURDIR)/bin/mongod $(CURDIR)/debian/mongodb-ssl-server/usr/bin
+	cp -v $(CURDIR)/bin/mongos $(CURDIR)/debian/mongodb-ssl-mongos/usr/bin
 
 	for binary in ${TOOLS} ; \
 	do \
-	  cp -v $(CURDIR)/bin/$$binary $(CURDIR)/debian/mongodb-enterprise-tools/usr/bin ; \
+	  cp -v $(CURDIR)/bin/$$binary $(CURDIR)/debian/mongodb-ssl-tools/usr/bin ; \
 	done
 
-	mkdir -p $(CURDIR)/debian/mongodb-enterprise-server/etc
-	cp $(CURDIR)/debian/mongod.conf $(CURDIR)/debian/mongodb-enterprise-server/etc/mongod.conf 
+	mkdir -p $(CURDIR)/debian/mongodb-ssl-server/etc
+	cp $(CURDIR)/debian/mongod.conf $(CURDIR)/debian/mongodb-ssl-server/etc/mongod.conf 
 
-	mkdir -p $(CURDIR)/debian/mongodb-enterprise-shell/usr/share/lintian/overrides/
-	mkdir -p $(CURDIR)/debian/mongodb-enterprise-server/usr/share/lintian/overrides/
-	mkdir -p $(CURDIR)/debian/mongodb-enterprise-mongos/usr/share/lintian/overrides/
-	mkdir -p $(CURDIR)/debian/mongodb-enterprise-tools/usr/share/lintian/overrides/
-	install -m 644 $(CURDIR)/debian/lintian-overrides 		$(CURDIR)/debian/mongodb-enterprise-shell/usr/share/lintian/overrides/mongodb-enterprise-shell
-	install -m 644 $(CURDIR)/debian/lintian-overrides 		$(CURDIR)/debian/mongodb-enterprise-server/usr/share/lintian/overrides/mongodb-enterprise-server
-	install -m 644 $(CURDIR)/debian/lintian-overrides 		$(CURDIR)/debian/mongodb-enterprise-mongos/usr/share/lintian/overrides/mongodb-enterprise-mongos
-	install -m 644 $(CURDIR)/debian/lintian-overrides 		$(CURDIR)/debian/mongodb-enterprise-tools/usr/share/lintian/overrides/mongodb-enterprise-tools
+	mkdir -p $(CURDIR)/debian/mongodb-ssl-shell/usr/share/lintian/overrides/
+	mkdir -p $(CURDIR)/debian/mongodb-ssl-server/usr/share/lintian/overrides/
+	mkdir -p $(CURDIR)/debian/mongodb-ssl-mongos/usr/share/lintian/overrides/
+	mkdir -p $(CURDIR)/debian/mongodb-ssl-tools/usr/share/lintian/overrides/
+	install -m 644 $(CURDIR)/debian/lintian-overrides 		$(CURDIR)/debian/mongodb-ssl-shell/usr/share/lintian/overrides/mongodb-ssl-shell
+	install -m 644 $(CURDIR)/debian/lintian-overrides 		$(CURDIR)/debian/mongodb-ssl-server/usr/share/lintian/overrides/mongodb-ssl-server
+	install -m 644 $(CURDIR)/debian/lintian-overrides 		$(CURDIR)/debian/mongodb-ssl-mongos/usr/share/lintian/overrides/mongodb-ssl-mongos
+	install -m 644 $(CURDIR)/debian/lintian-overrides 		$(CURDIR)/debian/mongodb-ssl-tools/usr/share/lintian/overrides/mongodb-ssl-tools
 
 # Build architecture-independent files here.
 binary-indep: build install
@@ -119,7 +119,7 @@ binary-arch: build install
 #	dh_installemacsen
 #	dh_installpam
 #	dh_installmime
-	dh_installinit -pmongodb-enterprise-server --name=mongod
+	dh_installinit -pmongodb-ssl-server --name=mongod
 #	dh_installinfo
 	dh_installman
 	dh_link
