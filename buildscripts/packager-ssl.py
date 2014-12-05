@@ -206,14 +206,14 @@ class Distro(object):
             raise Exception("BUG: unsupported platform?")
 
     def build_os(self):
-        """Return the build os label in the binary package to download ("rhel57", "rhel62" and "rhel70"
+        """Return the build os label in the binary package to download ("rhel55", "rhel62" and "rhel70"
         for redhat, "ubuntu1204" and "ubuntu1404" for Ubuntu, "debian71" for Debian), and "suse11"
         for SUSE)"""
 
         if re.search("(suse)", self.n):
             return [ "suse11" ]
         elif re.search("(redhat|fedora|centos)", self.n):
-            return [ "rhel70", "rhel62", "rhel57" ]
+            return [ "rhel70", "rhel62", "rhel55" ]
         elif self.n == 'amazon':
             return [ "amazon" ]
         elif self.n == 'ubuntu':
@@ -300,7 +300,7 @@ def setupdir(distro, build_os, arch, spec):
     # scripts, etc), along with the already-built binaries).  In case
     # the following format string is unclear, an example setupdir
     # would be dst/x86_64/debian-sysvinit/wheezy/mongodb-ssl-unstable/
-    # or dst/x86_64/redhat/rhel57/mongodb-ssl-unstable/
+    # or dst/x86_64/redhat/rhel55/mongodb-ssl-unstable/
     return "dst/%s/%s/%s/%s%s-%s/" % (arch, distro.name(), build_os, distro.pkgbase(), spec.suffix(), spec.pversion(distro))
 
 def unpack_binaries_into(build_os, arch, spec, where):
