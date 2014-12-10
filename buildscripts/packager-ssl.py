@@ -54,6 +54,15 @@ class Spec(object):
         self.gitspec = gitspec
         self.rel = rel
 
+    def is_rc(self):
+        return bool(re.search("-$", self.version()))
+
+    def is_nightly(self):
+        return bool(re.search("-rc\d+$", self.version()))
+
+    def is_pre_release(self):
+        return self.is_rc() or self.is_nightly()
+
     def version(self):
         return self.ver
 
@@ -153,12 +162,19 @@ class Distro(object):
 
         """
 
+        repo_directory = ""
+
+        if spec.is_pre_release():
+          repo_directory = "testing"
+        else:
+          repo_directory = spec.branch()
+
         if re.search("^(debian|ubuntu)", self.n):
-            return "repo/apt/%s/dists/%s/mongodb-ssl/%s/%s/binary-%s/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.repo_component(), self.archname(arch))
+            return "repo/apt/%s/dists/%s/mongodb-ssl/%s/%s/binary-%s/" % (self.n, self.repo_os_version(build_os), repo_directory, self.repo_component(), self.archname(arch))
         elif re.search("(redhat|fedora|centos|amazon)", self.n):
-            return "repo/yum/%s/%s/mongodb-ssl/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
+            return "repo/yum/%s/%s/mongodb-ssl/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), repo_directory, self.archname(arch))
         elif re.search("(suse)", self.n):
-            return "repo/zypper/%s/%s/mongodb-ssl/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
+            return "repo/zypper/%s/%s/mongodb-ssl/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), repo_directory, self.archname(arch))
         else:
             raise Exception("BUG: unsupported platform?")
 

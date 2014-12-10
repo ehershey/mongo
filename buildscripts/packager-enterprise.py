@@ -54,6 +54,15 @@ class Spec(object):
         self.gitspec = gitspec
         self.rel = rel
 
+    def is_rc(self):
+        return bool(re.search("-$", self.version()))
+
+    def is_nightly(self):
+        return bool(re.search("-rc\d+$", self.version()))
+
+    def is_pre_release(self):
+        return self.is_rc() or self.is_nightly()
+
     def version(self):
         return self.ver
 
@@ -84,13 +93,14 @@ class Spec(object):
       else:
         corenum = 1
       # RC's
-      if re.search("-rc\d+$", self.version()):
+      if self.is_rc():
         return "0.%s.%s" % (corenum, re.sub('.*-','',self.version()))
       # Nightlies
-      elif re.search("-$", self.version()):
+      elif self.is_nightly():
         return "0.%s.%s" % (corenum, time.strftime("%Y%m%d"))
       else:
         return str(corenum)
+
 
     def pversion(self, distro):
         # Note: Debian packages have funny rules about dashes in
@@ -134,7 +144,14 @@ class Distro(object):
         layout (as distinct from where that distro's packaging building
         tools place the package files).
 
+        Packages will go into repos corresponding to the major release 
+        series (2.5, 2.6, 2.7, 2.8, etc.) except for RC's and nightlies 
+        which will go into special separate "testing" directories 
+
         Examples:
+
+        repo/apt/ubuntu/dists/precise/mongodb-enterprise/testing/multiverse/binary-amd64
+        repo/apt/ubuntu/dists/precise/mongodb-enterprise/testing/multiverse/binary-i386
 
         repo/apt/ubuntu/dists/precise/mongodb-enterprise/2.5/multiverse/binary-amd64
         repo/apt/ubuntu/dists/precise/mongodb-enterprise/2.5/multiverse/binary-i386
@@ -146,19 +163,29 @@ class Distro(object):
         repo/apt/debian/dists/wheezy/mongodb-enterprise/2.5/main/binary-i386
 
         repo/yum/redhat/6/mongodb-enterprise/2.5/x86_64
-        yum/redhat/6/mongodb-enterprise/2.5/i386
+        repo/yum/redhat/6/mongodb-enterprise/2.5/i386
 
         repo/zypper/suse/11/mongodb-enterprise/2.5/x86_64
-        zypper/suse/11/mongodb-enterprise/2.5/i386
+        repo/zypper/suse/11/mongodb-enterprise/2.5/i386
+
+        repo/zypper/suse/11/mongodb-enterprise/testing/x86_64
+        repo/zypper/suse/11/mongodb-enterprise/testing/i386
 
         """
 
+        repo_directory = ""
+
+        if spec.is_pre_release():
+          repo_directory = "testing"
+        else:
+          repo_directory = spec.branch()
+
         if re.search("^(debian|ubuntu)", self.n):
-            return "repo/apt/%s/dists/%s/mongodb-enterprise/%s/%s/binary-%s/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.repo_component(), self.archname(arch))
+            return "repo/apt/%s/dists/%s/mongodb-enterprise/%s/%s/binary-%s/" % (self.n, self.repo_os_version(build_os), repo_directory, self.repo_component(), self.archname(arch))
         elif re.search("(redhat|fedora|centos)", self.n):
-            return "repo/yum/%s/%s/mongodb-enterprise/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
+            return "repo/yum/%s/%s/mongodb-enterprise/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), repo_directory, self.archname(arch))
         elif re.search("(suse)", self.n):
-            return "repo/zypper/%s/%s/mongodb-enterprise/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), spec.branch(), self.archname(arch))
+            return "repo/zypper/%s/%s/mongodb-enterprise/%s/%s/RPMS/" % (self.n, self.repo_os_version(build_os), repo_directory, self.archname(arch))
         else:
             raise Exception("BUG: unsupported platform?")
 
