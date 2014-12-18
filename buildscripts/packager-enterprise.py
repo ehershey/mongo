@@ -54,10 +54,10 @@ class Spec(object):
         self.gitspec = gitspec
         self.rel = rel
 
-    def is_rc(self):
+    def is_nightly(self):
         return bool(re.search("-$", self.version()))
 
-    def is_nightly(self):
+    def is_rc(self):
         return bool(re.search("-rc\d+$", self.version()))
 
     def is_pre_release(self):
