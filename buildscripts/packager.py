@@ -29,8 +29,8 @@
 import argparse
 import errno
 import getopt
+import httplib2
 from glob import glob
-from packager import httpget, is_valid_file, ensure_dir, backtick, sysassert, crossproduct
 import os
 import re
 import shutil
@@ -85,7 +85,7 @@ class Spec(object):
     def prelease(self):
       # "N" is either passed in on the command line, or "1"
       #
-      # 1) Standard release - "N" 
+      # 1) Standard release - "N"
       # 2) Nightly (snapshot) - "0.N.YYYYMMDDlatest"
       # 3) RC's - "0.N.rcX"
       if self.rel:
@@ -305,6 +305,36 @@ def main(argv):
     finally:
         os.chdir(oldcwd)
 
+def crossproduct(*seqs):
+    """A generator for iterating all the tuples consisting of elements
+    of seqs."""
+    l = len(seqs)
+    if l == 0:
+        pass
+    elif l == 1:
+        for i in seqs[0]:
+            yield [i]
+    else:
+        for lst in crossproduct(*seqs[:-1]):
+            for i in seqs[-1]:
+                lst2=list(lst)
+                lst2.append(i)
+                yield lst2
+
+def sysassert(argv):
+    """Run argv and assert that it exited with status 0."""
+    print "In %s, running %s" % (os.getcwd(), " ".join(argv))
+    sys.stdout.flush()
+    sys.stderr.flush()
+    assert(subprocess.Popen(argv).wait()==0)
+
+def backtick(argv):
+    """Run argv and return its output string."""
+    print "In %s, running %s" % (os.getcwd(), " ".join(argv))
+    sys.stdout.flush()
+    sys.stderr.flush()
+    return subprocess.Popen(argv, stdout=subprocess.PIPE).communicate()[0]
+
 def tarfile(build_os, arch, spec):
     """Return the location where we store the downloaded tarball for
     this package"""
@@ -318,6 +348,30 @@ def setupdir(distro, build_os, arch, spec):
     # would be dst/x86_64/debian-sysvinit/wheezy/mongodb-org-unstable/
     # or dst/x86_64/redhat/rhel55/mongodb-org-unstable/
     return "dst/%s/%s/%s/%s%s-%s/" % (arch, distro.name(), build_os, distro.pkgbase(), spec.suffix(), spec.pversion(distro))
+
+def httpget(url, filename):
+    """Download the contents of url to filename, return filename."""
+    print "Fetching %s to %s." % (url, filename)
+    conn = None
+    u=urlparse.urlparse(url)
+    assert(u.scheme=='http')
+    try:
+        h = httplib2.Http(cache = os.environ["HOME"] + "/.cache")
+        resp, content = h.request(url, "GET")
+        t=filename+'.TMP'
+        if resp.status==200:
+            f = open(t, 'w')
+            try:
+                f.write(content)
+            finally:
+                f.close()
+        else:
+            raise Exception("HTTP error %d" % resp.status)
+        os.rename(t, filename)
+    finally:
+        if conn:
+            conn.close()
+    return filename
 
 def unpack_binaries_into(build_os, arch, spec, where):
     """Unpack the tarfile for (build_os, arch, spec) into directory where."""
@@ -571,7 +625,7 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
     suffix=spec.suffix()
     sdir=setupdir(distro, build_os, arch, spec)
 
-    # Use special suse init script if we're building for SUSE 
+    # Use special suse init script if we're building for SUSE
     #
     if distro.name() == "suse":
         os.unlink(sdir+"rpm/init.d-mongod")
@@ -657,6 +711,27 @@ def write_rpm_macros_file(path, topdir, release_dist):
         f.write("%_use_internal_dependency_generator 0\n")
     finally:
         f.close()
+
+def ensure_dir(filename):
+    """Make sure that the directory that's the dirname part of
+    filename exists, and return filename."""
+    dirpart = os.path.dirname(filename)
+    try:
+        os.makedirs(dirpart)
+    except OSError: # as exc: # Python >2.5
+        exc=sys.exc_value
+        if exc.errno == errno.EEXIST:
+            pass
+        else:
+            raise exc
+    return filename
+
+def is_valid_file(parser, filename):
+    """Check if file exists, and return the filename"""
+    if not os.path.exists(filename):
+        parser.error("The file %s does not exist!" % arg)
+    else:
+        return filename
 
 if __name__ == "__main__":
     main(sys.argv)
