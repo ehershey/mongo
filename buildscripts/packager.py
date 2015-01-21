@@ -650,8 +650,11 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
     # that "macrofiles" setting doesn't do anything for newer RPM
     # versions, where you have to use the --macros flag instead.  And
     # all of this is to let us do our work with some guarantee that
-    # we're not clobbering anything that doesn't belong to us.  Why is
-    # RPM so braindamaged?
+    # we're not clobbering anything that doesn't belong to us.
+    #
+    # On RHEL systems, --rcfile will generally be used and 
+    # --macros will be used in Ubuntu.
+    #
     macrofiles=[l for l in backtick(["rpm", "--showrc"]).split("\n") if l.startswith("macrofiles")]
     flags=[]
     macropath=os.getcwd()+"/macros"
@@ -661,7 +664,7 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
         macrofiles=macrofiles[0]+":"+macropath
         rcfile=os.getcwd()+"/rpmrc"
         write_rpmrc_file(rcfile, macrofiles)
-        flags=["--rpmrc", rcfile]
+        flags=["--rcfile", rcfile]
     else:
         # This hard-coded hooey came from some box running RPM
         # 4.4.2.3.  It may not work over time, but RPM isn't sanely
@@ -678,7 +681,7 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
     finally:
         os.chdir(oldcwd)
     # Do the build.
-    flags.extend(["-D", "dynamic_version " + spec.pversion(distro), "-D", "dynamic_release " + spec.prelease()])
+    flags.extend(["-D", "dynamic_version=" + spec.pversion(distro), "-D", "dynamic_release=" + spec.prelease()])
     sysassert(["rpmbuild", "-ba", "--target", distro_arch] + flags + ["%s/SPECS/mongodb%s.spec" % (topdir, suffix)])
     r=distro.repodir(arch, build_os, spec)
     ensure_dir(r)
