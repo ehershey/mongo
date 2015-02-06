@@ -463,7 +463,7 @@ def make_deb(distro, build_os, arch, spec, srcdir):
     oldcwd=os.getcwd()
     try:
         os.chdir(sdir)
-        sysassert(["dpkg-buildpackage", "-a"+distro_arch, "-k Richard Kreuter <richard@10gen.com>"])
+        sysassert(["dpkg-buildpackage", "-a"+distro_arch, "-us", "-uc"])
     finally:
         os.chdir(oldcwd)
     r=distro.repodir(arch, build_os, spec)
@@ -495,7 +495,7 @@ def make_deb_repo(repo, distro, build_os, spec):
                 f.close()
     finally:
         os.chdir(oldpwd)
-    # Notes: the Release{,.gpg} files must live in a special place,
+    # Notes: the Release file must live in a special place,
     # and must be created after all the Packages.gz files have been
     # done.
     s="""Origin: mongodb
@@ -508,8 +508,6 @@ Description: MongoDB packages
 """ % (distro.repo_os_version(build_os), distro.repo_component())
     if os.path.exists(repo+"../../Release"):
         os.unlink(repo+"../../Release")
-    if os.path.exists(repo+"../../Release.gpg"):
-        os.unlink(repo+"../../Release.gpg")
     oldpwd=os.getcwd()
     os.chdir(repo+"../../")
     s2=backtick(["apt-ftparchive", "release", "."])
@@ -522,14 +520,6 @@ Description: MongoDB packages
             f.close()
 
         arg=None
-        for line in backtick(["gpg", "--list-keys"]).split("\n"):
-            tokens=line.split()
-            if len(tokens)>0 and tokens[0] == "uid":
-                arg=tokens[-1]
-                break
-        # Note: for some reason, I think --no-tty might be needed
-        # here, but maybe not.
-        sysassert(["gpg", "-r", arg, "--no-secmem-warning", "-abs", "--output", "Release.gpg", "Release"])
     finally:
         os.chdir(oldpwd)
 
