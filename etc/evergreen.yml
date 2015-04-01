@@ -255,6 +255,7 @@ tasks:
           - "./**.pdb"
           - "./**.msi"
           - "./etc/*san.suppressions"
+          - "version.txt"
         exclude_files:
           - "*_test.pdb"
     - func: "upload debugsymbols"
