@@ -30,7 +30,7 @@ import argparse
 import errno
 import getopt
 from glob import glob
-from packager import httpget, is_valid_file, ensure_dir, backtick, sysassert, crossproduct
+from packager import httpget, is_valid_file, ensure_dir, backtick, sysassert, crossproduct, make_deb
 import os
 import re
 import shutil
@@ -377,51 +377,6 @@ def make_repo(repodir, distro, build_os, spec):
     else:
         raise Exception("BUG: unsupported platform?")
 
-def make_deb(distro, build_os, arch, spec, srcdir):
-    # I can't remember the details anymore, but the initscript/upstart
-    # job files' names must match the package name in some way; and
-    # see also the --name flag to dh_installinit in the generated
-    # debian/rules file.
-    suffix=spec.suffix()
-    sdir=setupdir(distro, build_os, arch, spec)
-    if re.search("debian", distro.name()):
-        os.link(sdir+"debian/init.d", sdir+"debian/%s%s-server.mongod.init" % (distro.pkgbase(), suffix))
-        os.unlink(sdir+"debian/mongod.upstart")
-    elif re.search("ubuntu", distro.name()):
-        os.link(sdir+"debian/mongod.upstart", sdir+"debian/%s%s-server.mongod.upstart" % (distro.pkgbase(), suffix))
-        os.unlink(sdir+"debian/init.d")
-    else:
-        raise Exception("unknown debianoid flavor: not debian or ubuntu?")
-    # Rewrite the control and rules files
-    write_debian_changelog(sdir+"debian/changelog", spec, srcdir)
-    distro_arch=distro.archname(arch)
-    sysassert(["cp", "-v", srcdir+"debian/%s%s.control" % (distro.pkgbase(), suffix), sdir+"debian/control"])
-    sysassert(["cp", "-v", srcdir+"debian/%s%s.rules" % (distro.pkgbase(), suffix), sdir+"debian/rules"])
-
-
-    # old non-server-package postinst will be hanging around for old versions
-    #
-    if os.path.exists(sdir+"debian/postinst"):
-      os.unlink(sdir+"debian/postinst")
-
-    # copy our postinst files
-    #
-    sysassert(["sh", "-c", "cp -v \"%sdebian/\"*.postinst \"%sdebian/\""%(srcdir, sdir)])
-
-    # Do the packaging.
-    oldcwd=os.getcwd()
-    try:
-        os.chdir(sdir)
-        sysassert(["dpkg-buildpackage", "-a"+distro_arch])
-    finally:
-        os.chdir(oldcwd)
-    r=distro.repodir(arch, build_os, spec)
-    ensure_dir(r)
-    # FIXME: see if shutil.copyfile or something can do this without
-    # much pain.
-    sysassert(["sh", "-c", "cp -v \"%s/../\"*.deb \"%s\""%(sdir, r)])
-    return r
-
 def make_deb_repo(repo, distro, build_os, spec):
     # Note: the Debian repository Packages files must be generated
     # very carefully in order to be usable.
@@ -469,16 +424,6 @@ Description: MongoDB packages
             f.write(s2)
         finally:
             f.close()
-
-        arg=None
-        for line in backtick(["gpg", "--list-keys"]).split("\n"):
-            tokens=line.split()
-            if len(tokens)>0 and tokens[0] == "uid":
-                arg=tokens[-1]
-                break
-        # Note: for some reason, I think --no-tty might be needed
-        # here, but maybe not.
-        sysassert(["gpg", "-r", arg, "--no-secmem-warning", "-abs", "--output", "Release.gpg", "Release"])
     finally:
         os.chdir(oldpwd)
 
