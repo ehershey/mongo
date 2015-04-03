@@ -463,7 +463,7 @@ def make_deb(distro, build_os, arch, spec, srcdir):
     oldcwd=os.getcwd()
     try:
         os.chdir(sdir)
-        sysassert(["dpkg-buildpackage", "-a"+distro_arch])
+        sysassert(["dpkg-buildpackage", "-uc", "-us", "-a"+distro_arch])
     finally:
         os.chdir(oldcwd)
     r=distro.repodir(arch, build_os, spec)
@@ -521,15 +521,6 @@ Description: MongoDB packages
         finally:
             f.close()
 
-        arg=None
-        for line in backtick(["gpg", "--list-keys"]).split("\n"):
-            tokens=line.split()
-            if len(tokens)>0 and tokens[0] == "uid":
-                arg=tokens[-1]
-                break
-        # Note: for some reason, I think --no-tty might be needed
-        # here, but maybe not.
-        sysassert(["gpg", "-r", arg, "--no-secmem-warning", "-abs", "--output", "Release.gpg", "Release"])
     finally:
         os.chdir(oldpwd)
 
