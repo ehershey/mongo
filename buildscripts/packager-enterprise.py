@@ -412,7 +412,7 @@ def make_deb(distro, build_os, arch, spec, srcdir):
     oldcwd=os.getcwd()
     try:
         os.chdir(sdir)
-        sysassert(["dpkg-buildpackage", "-a"+distro_arch, "-k Richard Kreuter <richard@10gen.com>"])
+        sysassert(["dpkg-buildpackage", "-a"+distro_arch])
     finally:
         os.chdir(oldcwd)
     r=distro.repodir(arch, build_os, spec)
