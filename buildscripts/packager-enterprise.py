@@ -30,7 +30,7 @@ import argparse
 import errno
 import getopt
 from glob import glob
-from packager import httpget, is_valid_file, ensure_dir, backtick, sysassert, crossproduct, make_deb
+from packager import httpget, is_valid_file, ensure_dir, backtick, sysassert, crossproduct, make_deb, make_rpm
 import os
 import re
 import shutil
@@ -513,76 +513,6 @@ def write_debian_changelog(path, spec, srcdir):
         f.write(s)
     finally:
         f.close()
-
-def make_rpm(distro, build_os, arch, spec, srcdir):
-    # Create the specfile.
-    suffix=spec.suffix()
-    sdir=setupdir(distro, build_os, arch, spec)
-
-    # Use special suse init script if we're building for SUSE 
-    #
-    if distro.name() == "suse":
-        os.unlink(sdir+"rpm/init.d-mongod")
-        os.link(sdir+"rpm/init.d-mongod.suse", sdir+"rpm/init.d-mongod")
-
-    specfile=srcdir+"rpm/mongodb%s.spec" % suffix
-    topdir=ensure_dir('%s/rpmbuild/%s/' % (os.getcwd(), build_os))
-    for subdir in ["BUILD", "RPMS", "SOURCES", "SPECS", "SRPMS"]:
-        ensure_dir("%s/%s/" % (topdir, subdir))
-    distro_arch=distro.archname(arch)
-    # RPM tools take these macro files that define variables in
-    # RPMland.  Unfortunately, there's no way to tell RPM tools to use
-    # a given file *in addition* to the files that it would already
-    # load, so we have to figure out what it would normally load,
-    # augment that list, and tell RPM to use the augmented list.  To
-    # figure out what macrofiles ordinarily get loaded, older RPM
-    # versions had a parameter called "macrofiles" that could be
-    # extracted from "rpm --showrc".  But newer RPM versions don't
-    # have this.  To tell RPM what macros to use, older versions of
-    # RPM have a --macros option that doesn't work; on these versions,
-    # you can put a "macrofiles" parameter into an rpmrc file.  But
-    # that "macrofiles" setting doesn't do anything for newer RPM
-    # versions, where you have to use the --macros flag instead.  And
-    # all of this is to let us do our work with some guarantee that
-    # we're not clobbering anything that doesn't belong to us.
-    #
-    # On RHEL systems, --rcfile will generally be used and 
-    # --macros will be used in Ubuntu.
-    #
-    macrofiles=[l for l in backtick(["rpm", "--showrc"]).split("\n") if l.startswith("macrofiles")]
-    flags=[]
-    macropath=os.getcwd()+"/macros"
-
-    write_rpm_macros_file(macropath, topdir, distro.release_dist(build_os))
-    if len(macrofiles)>0:
-        macrofiles=macrofiles[0]+":"+macropath
-        rcfile=os.getcwd()+"/rpmrc"
-        write_rpmrc_file(rcfile, macrofiles)
-        flags=["--rcfile", rcfile]
-    else:
-        # This hard-coded hooey came from some box running RPM
-        # 4.4.2.3.  It may not work over time, but RPM isn't sanely
-        # configurable.
-        flags=["--macros", "/usr/lib/rpm/macros:/usr/lib/rpm/%s-linux/macros:/etc/rpm/macros.*:/etc/rpm/macros:/etc/rpm/%s-linux/macros:~/.rpmmacros:%s" % (distro_arch, distro_arch, macropath)]
-    # Put the specfile and the tar'd up binaries and stuff in
-    # place. FIXME: see if shutil.copyfile can do this without too
-    # much hassle.
-    sysassert(["cp", "-v", specfile, topdir+"SPECS/"])
-    oldcwd=os.getcwd()
-    os.chdir(sdir+"/../")
-    try:
-        sysassert(["tar", "-cpzf", topdir+"SOURCES/mongodb%s-%s.tar.gz" % (suffix, spec.pversion(distro)), os.path.basename(os.path.dirname(sdir))])
-    finally:
-        os.chdir(oldcwd)
-    # Do the build.
-    flags.extend(["-D", "dynamic_version=" + spec.pversion(distro), "-D", "dynamic_release=" + spec.prelease()])
-    sysassert(["rpmbuild", "-ba", "--target", distro_arch] + flags + ["%s/SPECS/mongodb%s.spec" % (topdir, suffix)])
-    r=distro.repodir(arch, build_os, spec)
-    ensure_dir(r)
-    # FIXME: see if some combination of shutil.copy<hoohah> and glob
-    # can do this without shelling out.
-    sysassert(["sh", "-c", "cp -v \"%s/RPMS/%s/\"*.rpm \"%s\""%(topdir, distro_arch, r)])
-    return r
 
 def make_rpm_repo(repo):
     oldpwd=os.getcwd()
