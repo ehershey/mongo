@@ -672,7 +672,7 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
     finally:
         os.chdir(oldcwd)
     # Do the build.
-    flags.extend(["-D", "dynamic_version=" + spec.pversion(distro), "-D", "dynamic_release=" + spec.prelease()])
+    flags.extend(["-D", "dynamic_version " + spec.pversion(distro), "-D", "dynamic_release " + spec.prelease()])
     sysassert(["rpmbuild", "-ba", "--target", distro_arch] + flags + ["%s/SPECS/mongodb%s.spec" % (topdir, suffix)])
     r=distro.repodir(arch, build_os, spec)
     ensure_dir(r)
@@ -729,3 +729,5 @@ def is_valid_file(parser, filename):
 
 if __name__ == "__main__":
     main(sys.argv)
+
+
