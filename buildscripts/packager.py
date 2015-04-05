@@ -670,8 +670,8 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
     spec_dest = open(topdir+"SPECS/" + os.path.basename(specfile), "w")
     for line in spec_source:
       spec_dest.write(line.replace('%{dynamic_version}',spec.pversion(distro)))
-    close(spec_source)
-    close(spec_dest)
+    spec_source.close()
+    spec_dest.close()
 
     # sysassert(["cp", "-v", specfile, topdir+"SPECS/"])
     oldcwd=os.getcwd()
