@@ -723,7 +723,7 @@ def ensure_dir(filename):
 def is_valid_file(parser, filename):
     """Check if file exists, and return the filename"""
     if not os.path.exists(filename):
-        parser.error("The file %s does not exist!" % arg)
+        parser.error("The file %s does not exist!" % filename)
     else:
         return filename
 
