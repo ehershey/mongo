@@ -662,9 +662,18 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
         # configurable.
         flags=["--macros", "/usr/lib/rpm/macros:/usr/lib/rpm/%s-linux/macros:/etc/rpm/macros.*:/etc/rpm/macros:/etc/rpm/%s-linux/macros:~/.rpmmacros:%s" % (distro_arch, distro_arch, macropath)]
     # Put the specfile and the tar'd up binaries and stuff in
-    # place. FIXME: see if shutil.copyfile can do this without too
-    # much hassle.
-    sysassert(["cp", "-v", specfile, topdir+"SPECS/"])
+    # place.
+    #
+    # The version of rpm and rpm tools in RHEL 5.5 can't interpolate the 
+    # %{dynamic_version} macro, so do it manually
+    spec_source = open(specfile, "r")
+    spec_dest = open(topdir+"SPECS/" + os.path.basename(specfile), "w")
+    for line in spec_source:
+      spec_dest.write(line.replace('%{dynamic_version}',spec.pversion(distro)))
+    close(spec_source)
+    close(spec_dest)
+
+    # sysassert(["cp", "-v", specfile, topdir+"SPECS/"])
     oldcwd=os.getcwd()
     os.chdir(sdir+"/../")
     try:
@@ -672,6 +681,7 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
     finally:
         os.chdir(oldcwd)
     # Do the build.
+
     flags.extend(["-D", "dynamic_version " + spec.pversion(distro), "-D", "dynamic_release " + spec.prelease(), "-D", "_topdir " + topdir])
     sysassert(["rpmbuild", "-ba", "--target", distro_arch] + flags + ["%s/SPECS/mongodb%s.spec" % (topdir, suffix)])
     r=distro.repodir(arch, build_os, spec)
