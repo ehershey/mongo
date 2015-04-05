@@ -669,7 +669,9 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
     spec_source = open(specfile, "r")
     spec_dest = open(topdir+"SPECS/" + os.path.basename(specfile), "w")
     for line in spec_source:
-      spec_dest.write(line.replace('%{dynamic_version}',spec.pversion(distro)))
+      line = line.replace('%{dynamic_version}',spec.pversion(distro))
+      line = line.replace('%{dynamic_release}',spec.prelease())
+      spec_dest.write(line)
     spec_source.close()
     spec_dest.close()
 
