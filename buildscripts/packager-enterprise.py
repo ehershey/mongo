@@ -262,7 +262,7 @@ def main(argv):
       DISTRO_CHOICES.extend(distro.build_os())
 
     parser = argparse.ArgumentParser(description='Build MongoDB Packages')
-    parser.add_argument("-s", "--server-version", help="Server version to build (e.g. 2.7.8-rc0)")
+    parser.add_argument("-s", "--server-version", help="Server version to build (e.g. 2.7.8-rc0)", required=True)
     parser.add_argument("-m", "--metadata-gitspec", help="Gitspec to use for package metadata files", required=False)
     parser.add_argument("-r", "--release-number", help="RPM release number base", type=int, required=False)
     parser.add_argument("-d", "--distros", help="Distros to build for", choices=DISTRO_CHOICES, required=False, default=[], action='append')
