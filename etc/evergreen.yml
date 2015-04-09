@@ -274,6 +274,7 @@ tasks:
           mv mongodb-*-debugsymbols.${ext|tgz} mongo-debugsymbols.tgz || true
           mv mongodb-*.${ext|tgz} mongodb-binaries.tgz
 
+          if [ "${has_packages|}" = "true" ] ; then cd buildscripts ; ${python|python} ${packager_script} --distros ${packager_distro} --tarball `pwd`/../mongodb-binaries.tgz -s `cat ../version.txt` -m HEAD ; cd .. ; fi
     - command: archive.targz_pack
       params:
         target: "artifacts.tgz"
@@ -1768,6 +1769,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: ubuntu1204
   tasks:
   - name: compile
     distros:
@@ -1862,6 +1866,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: ubuntu1404
   tasks:
   - name: compile
     distros:
@@ -2011,6 +2018,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: amazon
   tasks:
   - name: compile
     distros:
@@ -2787,6 +2797,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager-enterprise.py
+    packager_distro: rhel57
   tasks:
   - name: compile
     distros:
@@ -2827,6 +2840,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager-enterprise.py
+    packager_distro: rhel62
   tasks:
   - name: compile
     distros:
@@ -2867,6 +2883,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager-enterprise.py
+    packager_distro: rhel70
   tasks:
   - name: compile
   - name: audit
@@ -2904,6 +2923,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: rhel55
   tasks:
   - name: compile
     distros:
@@ -2999,6 +3021,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: rhel62
   tasks:
   - name: compile
     distros:
@@ -3094,6 +3119,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: rhel70
   tasks:
   - name: compile
     distros:
@@ -3194,6 +3222,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager-enterprise.py
+    packager_distro: ubuntu1204
   tasks:
   - name: compile
     distros:
@@ -3232,6 +3263,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager-enterprise.py
+    packager_distro: ubuntu1404
   tasks:
   - name: compile
     distros:
@@ -3274,6 +3308,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager-enterprise.py
+    packager_distro: suse11
   tasks:
   - name: compile
     distros:
@@ -3311,6 +3348,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: suse11
   tasks:
   - name: compile
     distros:
@@ -3484,6 +3524,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager-enterprise.py
+    packager_distro: debian71
   tasks:
   - name: compile
     distros:
@@ -3521,6 +3564,9 @@ buildvariants:
     num_cores: $(grep -c ^processor /proc/cpuinfo)
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
+    has_packages: true
+    packager_script: packager.py
+    packager_distro: debian71
   tasks:
   - name: compile
     distros:
