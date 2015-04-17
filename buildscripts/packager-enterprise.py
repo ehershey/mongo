@@ -266,6 +266,7 @@ def main(argv):
     parser.add_argument("-m", "--metadata-gitspec", help="Gitspec to use for package metadata files", required=False)
     parser.add_argument("-r", "--release-number", help="RPM release number base", type=int, required=False)
     parser.add_argument("-d", "--distros", help="Distros to build for", choices=DISTRO_CHOICES, required=False, default=[], action='append')
+    parser.add_argument("-p", "--prefix", help="Directory to build into", required=False)
     parser.add_argument("-a", "--arches", help="Architecture to build", choices=DEFAULT_ARCHES, default=DEFAULT_ARCHES, required=False, action='append')
     parser.add_argument("-t", "--tarball", help="Local tarball to package instead of downloading (only valid with one distro/arch combination)", required=False, type=lambda x: is_valid_file(parser, x))
     args = parser.parse_args()
@@ -279,9 +280,12 @@ def main(argv):
     oldcwd=os.getcwd()
     srcdir=oldcwd+"/../"
 
-    # We do all our work in a randomly-created directory. You can set
-    # TEMPDIR to influence where this program will do stuff.
-    prefix=tempfile.mkdtemp()
+    # Where to do all of our work. Use a randomly-created directory if one
+    # is not passed in.
+    prefix = args.prefix
+    if prefix is None:
+      prefix=tempfile.mkdtemp()
+
     print "Working in directory %s" % prefix
 
     os.chdir(prefix)
