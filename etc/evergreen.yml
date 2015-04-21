@@ -1347,7 +1347,7 @@ tasks:
         aws_key: ${aws_key}
         aws_secret: ${aws_secret}
         build_variants: ["ubuntu1204", "ubuntu1404", "amazon", "enterprise-rhel-57-64-bit", "enterprise-rhel-62-64-bit", "enterprise-rhel-70-64-bit", "rhel55", "rhel62", "rhel70", "enterprise-ubuntu1204-64", "enterprise-ubuntu1404-64", "enterprise-suse11-64", "suse11", "enterprise-debian71-64", "debian71"]
-        local_file: src/repo-${push_name}-${push_arch}-${suffix}.tgz
+        local_file: src/repo-${push_arch}.tgz
         bucket: build-push-testing
         permissions: public-read
         content_type: ${content_type|application/x-gzip}
@@ -1460,8 +1460,8 @@ tasks:
 
             #Package repo tarballs
             - {'source': {'path': '${push_path}-STAGE/${push_name}/repo-${push_arch}-${task_id}.tgz', 'bucket': 'build-push-testing'},
-               'destination': {'path:' '${push_path}/repo-${push_arch}.tgz
-               'build_variants: ["ubuntu1204", "ubuntu1404", "amazon", "enterprise-rhel-57-64-bit", "enterprise-rhel-62-64-bit", "enterprise-rhel-70-64-bit", "rhel55", "rhel62", "rhel70", "enterprise-ubuntu1204-64", "enterprise-ubuntu1404-64", "enterprise-suse11-64", "suse11", "enterprise-debian71-64", "debian71"] }
+               'destination': {'path': '${push_path}/repo-${push_arch}.tgz', 'bucket': '${push_bucket}'},
+               'build_variants': ["ubuntu1204", "ubuntu1404", "amazon", "enterprise-rhel-57-64-bit", "enterprise-rhel-62-64-bit", "enterprise-rhel-70-64-bit", "rhel55", "rhel62", "rhel70", "enterprise-ubunt  u1204-64", "enterprise-ubuntu1404-64", "enterprise-suse11-64", "suse11", "enterprise-debian71-64", "debian71"], }
 
 #######################################
 #               Modules               #
