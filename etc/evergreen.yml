@@ -295,6 +295,7 @@ tasks:
           - "./**.msi"
           - "./etc/*san.suppressions"
           - "version.txt"
+          - "repo/**"
         exclude_files:
           - "*_test.pdb"
     - func: "upload debugsymbols"
@@ -1122,7 +1123,8 @@ tasks:
           mv distsrc.${ext|tgz} mongodb-src-${src_suffix}.${ext|tar.gz} || true
           /usr/bin/find build/ -type f | grep msi$ | xargs -I original_filename cp original_filename mongodb-win32-${push_arch}-${suffix}.msi || true
 
-          notary-client.py --key-name "${signing_key_name}" --auth-token-file ./signing_auth_token --comment "MCI Automatic Signing ${revision} - ${build_variant} - ${branch_name}" --notary-url http://notary-service.build.10gen.cc:5000 --skip-missing mongodb-${push_name}-${push_arch}-${suffix}.${ext|tgz} mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz} mongodb-win32-${push_arch}-${suffix}.msi mongodb-src-${src_suffix}.${ext|tar.gz}
+          notary-client.py --key-name "${signing_key_name}" --auth-token-file ./signing_auth_token --comment "MCI Automatic Signing ${revision} - ${build_variant} - ${branch_name}" --notary-url http://notary-service.build.10gen.cc:5000 --skip-missing mongodb-${push_name}-${push_arch}-${suffix}.${ext|tgz} mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz} mongodb-win32-${push_arch}-${suffix}.msi mongodb-src-${src_suffix}.${ext|tgz} $(find repo/ -name \*.rpm -o -name \*.deb -o -name Release)
+          tar zcvf repo-${push_arch}.tgz repo || true
           rm signing_auth_token
 
     # Put the binaries tarball/zipfile
@@ -1347,6 +1349,18 @@ tasks:
         content_type: text/plain
         remote_file: ${push_path}-STAGE/${push_name}/mongodb-win32-${push_arch}-${suffix}-${task_id}-signed.msi.md5
 
+    # Put the tarred up Package repo
+    - command: s3.put
+      params:
+        aws_key: ${aws_key}
+        aws_secret: ${aws_secret}
+        build_variants: ["ubuntu1204", "ubuntu1404", "amazon", "enterprise-rhel-57-64-bit", "enterprise-rhel-62-64-bit", "enterprise-rhel-70-64-bit", "rhel55", "rhel62", "rhel70", "enterprise-ubuntu1204-64", "enterprise-ubuntu1404-64", "enterprise-suse11-64", "suse11", "enterprise-debian71-64", "debian71"]
+        local_file: src/repo-${push_name}-${push_arch}-${suffix}.tgz
+        bucket: build-push-testing
+        permissions: public-read
+        content_type: ${content_type|application/x-gzip}
+        remote_file: ${push_path}-STAGE/${push_name}/repo-${push_arch}-${task_id}.tgz
+
     - command: s3Copy.copy
       params:
         aws_key: ${aws_key}
@@ -1451,6 +1465,11 @@ tasks:
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-win32-${push_arch}-${suffix}-${task_id}-signed.msi.md5', 'bucket': 'build-push-testing'},
                'destination': {'path': '${push_path}/mongodb-win32-${push_arch}-${suffix}-signed.msi.md5', 'bucket': '${push_bucket}'},
                'build_variants': ['enterprise-windows-64', 'windows-64', 'windows-64-2k8', 'windows-64-2k8-ssl', 'windows-32'], }
+
+            #Package repo tarballs
+            - {'source': {'path': '${push_path}-STAGE/${push_name}/repo-${push_arch}-${task_id}.tgz', 'bucket': 'build-push-testing'},
+               'destination': {'path:' '${push_path}/repo-${push_arch}.tgz
+               'build_variants: ["ubuntu1204", "ubuntu1404", "amazon", "enterprise-rhel-57-64-bit", "enterprise-rhel-62-64-bit", "enterprise-rhel-70-64-bit", "rhel55", "rhel62", "rhel70", "enterprise-ubuntu1204-64", "enterprise-ubuntu1404-64", "enterprise-suse11-64", "suse11", "enterprise-debian71-64", "debian71"] }
     - command: shell.exec
       params:
         working_dir: src
