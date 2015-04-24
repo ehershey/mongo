@@ -248,11 +248,8 @@ class Distro(object):
         else:
           return re.sub(r'^rh(el\d).*$', r'\1', build_os)
 
-def main(argv):
+def get_args(distros):
 
-    # --distros must be "build_os" value, not actual distro name ("ubuntu1404" vs. "ubuntu")
-    #
-    distros=[Distro(distro) for distro in DISTROS]
     DISTRO_CHOICES=[]
     for distro in distros:
       DISTRO_CHOICES.extend(distro.build_os())
@@ -265,11 +262,19 @@ def main(argv):
     parser.add_argument("-p", "--prefix", help="Directory to build into", required=False)
     parser.add_argument("-a", "--arches", help="Architecture to build", choices=DEFAULT_ARCHES, default=DEFAULT_ARCHES, required=False, action='append')
     parser.add_argument("-t", "--tarball", help="Local tarball to package instead of downloading (only valid with one distro/arch combination)", required=False, type=lambda x: is_valid_file(parser, x))
+
     args = parser.parse_args()
 
     if len(args.distros) * len(args.arches) > 1 and args.tarball:
       parser.error("Can only specify local tarball with one distro/arch combination")
 
+    return args
+
+def main(argv):
+
+    distros=[Distro(distro) for distro in DISTROS]
+
+    args = get_args(distros)
 
     spec = Spec(args.server_version, args.metadata_gitspec, args.release_number)
 
@@ -280,7 +285,7 @@ def main(argv):
     # is not passed in.
     prefix = args.prefix
     if prefix is None:
-      prefix=tempfile.mkdtemp()
+      prefix = tempfile.mkdtemp()
     print "Working in directory %s" % prefix
 
     os.chdir(prefix)
@@ -363,11 +368,8 @@ def httpget(url, filename):
         resp, content = h.request(url, "GET")
         t=filename+'.TMP'
         if resp.status==200:
-            f = open(t, 'w')
-            try:
+            with open(t, 'w') as f:
                 f.write(content)
-            finally:
-                f.close()
         else:
             raise Exception("HTTP error %d" % resp.status)
         os.rename(t, filename)
@@ -466,7 +468,7 @@ def make_deb(distro, build_os, arch, spec, srcdir):
     oldcwd=os.getcwd()
     try:
         os.chdir(sdir)
-        sysassert(["dpkg-buildpackage", "-uc", "-us", "-a"+distro_arch])
+        sysassert(["dpkg-buildpackage", "-uc", "-us", "-a" + distro_arch])
     finally:
         os.chdir(oldcwd)
     r=distro.repodir(arch, build_os, spec)
@@ -485,17 +487,11 @@ def make_deb_repo(repo, distro, build_os, spec):
         dirs=set([os.path.dirname(deb)[2:] for deb in backtick(["find", ".", "-name", "*.deb"]).split()])
         for d in dirs:
             s=backtick(["dpkg-scanpackages", d, "/dev/null"])
-            f=open(d+"/Packages", "w")
-            try:
+            with open(d+"/Packages", "w") as f:
                 f.write(s)
-            finally:
-                f.close()
             b=backtick(["gzip", "-9c", d+"/Packages"])
-            f=open(d+"/Packages.gz", "wb")
-            try:
+            with open(d+"/Packages.gz", "wb") as f:
                 f.write(b)
-            finally:
-                f.close()
     finally:
         os.chdir(oldpwd)
     # Notes: the Release{,.gpg} files must live in a special place,
@@ -517,13 +513,9 @@ Description: MongoDB packages
     os.chdir(repo+"../../")
     s2=backtick(["apt-ftparchive", "release", "."])
     try:
-        f=open("Release", 'w')
-        try:
+        with open("Release", 'w') as f:
             f.write(s)
             f.write(s2)
-        finally:
-            f.close()
-
     finally:
         os.chdir(oldpwd)
 
@@ -600,7 +592,6 @@ def write_debian_changelog(path, spec, srcdir):
         s=preamble+backtick(["sh", "-c", "git archive %s debian/changelog | tar xOf -" % spec.metadata_gitspec()])
     finally:
         os.chdir(oldcwd)
-    f=open(path, 'w')
     lines=s.split("\n")
     # If the first line starts with "mongodb", it's not a revision
     # preamble, and so frob the version number.
@@ -609,10 +600,8 @@ def write_debian_changelog(path, spec, srcdir):
     lines=[re.sub("^mongodb ", "mongodb%s " % (spec.suffix()), l) for l in lines]
     lines=[re.sub("^  --", " --", l) for l in lines]
     s="\n".join(lines)
-    try:
+    with open(path, 'w') as f:
         f.write(s)
-    finally:
-        f.close()
 
 def make_rpm(distro, build_os, arch, spec, srcdir):
     # Create the specfile.
@@ -669,16 +658,13 @@ def make_rpm(distro, build_os, arch, spec, srcdir):
     #
     # The version of rpm and rpm tools in RHEL 5.5 can't interpolate the 
     # %{dynamic_version} macro, so do it manually
-    spec_source = open(specfile, "r")
-    spec_dest = open(topdir+"SPECS/" + os.path.basename(specfile), "w")
-    for line in spec_source:
-      line = line.replace('%{dynamic_version}',spec.pversion(distro))
-      line = line.replace('%{dynamic_release}',spec.prelease())
-      spec_dest.write(line)
-    spec_source.close()
-    spec_dest.close()
+    with open(specfile, "r") as spec_source:
+      with open(topdir+"SPECS/" + os.path.basename(specfile), "w") as spec_dest:
+        for line in spec_source:
+          line = line.replace('%{dynamic_version}', spec.pversion(distro))
+          line = line.replace('%{dynamic_release}', spec.prelease())
+          spec_dest.write(line)
 
-    # sysassert(["cp", "-v", specfile, topdir+"SPECS/"])
     oldcwd=os.getcwd()
     os.chdir(sdir+"/../")
     try:
@@ -706,20 +692,14 @@ def make_rpm_repo(repo):
 
 
 def write_rpmrc_file(path, string):
-    f=open(path, 'w')
-    try:
+    with open(path, 'w') as f:
         f.write(string)
-    finally:
-        f.close()
 
 def write_rpm_macros_file(path, topdir, release_dist):
-    f=open(path, 'w')
-    try:
+    with open(path, 'w') as f:
         f.write("%%_topdir	%s\n" % topdir)
         f.write("%%dist	.%s\n" % release_dist)
         f.write("%_use_internal_dependency_generator 0\n")
-    finally:
-        f.close()
 
 def ensure_dir(filename):
     """Make sure that the directory that's the dirname part of
