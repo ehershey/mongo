@@ -1469,7 +1469,23 @@ tasks:
             #Package repo tarballs
             - {'source': {'path': '${push_path}-STAGE/${push_name}/repo-${push_arch}-${task_id}.tgz', 'bucket': 'build-push-testing'},
                'destination': {'path': '${push_path}/repo-${push_arch}.tgz', 'bucket': '${push_bucket}'},
-               'build_variants': ["ubuntu1204", "ubuntu1404", "amazon", "enterprise-rhel-57-64-bit", "enterprise-rhel-62-64-bit", "enterprise-rhel-70-64-bit", "rhel55", "rhel62", "rhel70", "enterprise-ubunt  u1204-64", "enterprise-ubuntu1404-64", "enterprise-suse11-64", "suse11", "enterprise-debian71-64", "debian71"], }
+               'build_variants': [
+                 "ubuntu1204",
+                 "ubuntu1404",
+                 "amazon",
+                 "enterprise-rhel-57-64-bit",
+                 "enterprise-rhel-62-64-bit",
+                 "enterprise-rhel-70-64-bit",
+                 "rhel55",
+                 "rhel62",
+                 "rhel70",
+                 "enterprise-ubunt  u1204-64",
+                 "enterprise-ubuntu1404-64",
+                 "enterprise-suse11-64",
+                 "suse11",
+                 "enterprise-debian71-64",
+                 "debian71"],
+                 }
 
 #######################################
 #               Modules               #
