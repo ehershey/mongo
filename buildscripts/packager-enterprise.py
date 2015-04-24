@@ -30,7 +30,9 @@ import argparse
 import errno
 import getopt
 from glob import glob
-from packager import httpget, is_valid_file, ensure_dir, backtick, sysassert, crossproduct, make_deb, make_rpm
+from packager import httpget, is_valid_file, ensure_dir, backtick, sysassert, \
+    crossproduct, make_deb, make_rpm, get_args, write_debian_changelog, \
+    make_rpm_repo, write_rpmrc_file, write_rpm_macros_file
 import os
 import re
 import shutil
@@ -254,26 +256,9 @@ class Distro(object):
 
 def main(argv):
 
-    # --distros must be "build_os" value, not actual distro name ("ubuntu1404" vs. "ubuntu")
-    #
     distros=[Distro(distro) for distro in DISTROS]
-    DISTRO_CHOICES=[]
-    for distro in distros:
-      DISTRO_CHOICES.extend(distro.build_os())
 
-    parser = argparse.ArgumentParser(description='Build MongoDB Packages')
-    parser.add_argument("-s", "--server-version", help="Server version to build (e.g. 2.7.8-rc0)", required=True)
-    parser.add_argument("-m", "--metadata-gitspec", help="Gitspec to use for package metadata files", required=False)
-    parser.add_argument("-r", "--release-number", help="RPM release number base", type=int, required=False)
-    parser.add_argument("-d", "--distros", help="Distros to build for", choices=DISTRO_CHOICES, required=False, default=[], action='append')
-    parser.add_argument("-p", "--prefix", help="Directory to build into", required=False)
-    parser.add_argument("-a", "--arches", help="Architecture to build", choices=DEFAULT_ARCHES, default=DEFAULT_ARCHES, required=False, action='append')
-    parser.add_argument("-t", "--tarball", help="Local tarball to package instead of downloading (only valid with one distro/arch combination)", required=False, type=lambda x: is_valid_file(parser, x))
-    args = parser.parse_args()
-
-    if len(args.distros) * len(args.arches) > 1 and args.tarball:
-      parser.error("Can only specify local tarball with one distro/arch combination")
-
+    args = get_args(distros)
 
     spec = Spec(args.server_version, args.metadata_gitspec, args.release_number)
 
@@ -390,17 +375,11 @@ def make_deb_repo(repo, distro, build_os, spec):
         dirs=set([os.path.dirname(deb)[2:] for deb in backtick(["find", ".", "-name", "*.deb"]).split()])
         for d in dirs:
             s=backtick(["dpkg-scanpackages", d, "/dev/null"])
-            f=open(d+"/Packages", "w")
-            try:
+            with open(d+"/Packages", "w") as f:
                 f.write(s)
-            finally:
-                f.close()
             b=backtick(["gzip", "-9c", d+"/Packages"])
-            f=open(d+"/Packages.gz", "wb")
-            try:
+            with open(d+"/Packages.gz", "wb") as f:
                 f.write(b)
-            finally:
-                f.close()
     finally:
         os.chdir(oldpwd)
     # Notes: the Release{,.gpg} files must live in a special place,
@@ -422,12 +401,9 @@ Description: MongoDB packages
     os.chdir(repo+"../../")
     s2=backtick(["apt-ftparchive", "release", "."])
     try:
-        f=open("Release", 'w')
-        try:
+        with open("Release", 'w') as f:
             f.write(s)
             f.write(s2)
-        finally:
-            f.close()
     finally:
         os.chdir(oldpwd)
 
@@ -494,54 +470,6 @@ def move_repos_into_place(src, dst):
     os.rename(tmpnam, dst)
     if oldnam:
         os.rename(oldnam, dst+".old")
-
-
-def write_debian_changelog(path, spec, srcdir):
-    oldcwd=os.getcwd()
-    os.chdir(srcdir)
-    preamble=""
-    try:
-        s=preamble+backtick(["sh", "-c", "git archive %s debian/changelog | tar xOf -" % spec.metadata_gitspec()])
-    finally:
-        os.chdir(oldcwd)
-    f=open(path, 'w')
-    lines=s.split("\n")
-    # If the first line starts with "mongodb", it's not a revision
-    # preamble, and so frob the version number.
-    lines[0]=re.sub("^mongodb \\(.*\\)", "mongodb (%s)" % (spec.pversion(Distro("debian"))), lines[0])
-    # Rewrite every changelog entry starting in mongodb<space>
-    lines=[re.sub("^mongodb ", "mongodb%s " % (spec.suffix()), l) for l in lines]
-    lines=[re.sub("^  --", " --", l) for l in lines]
-    s="\n".join(lines)
-    try:
-        f.write(s)
-    finally:
-        f.close()
-
-def make_rpm_repo(repo):
-    oldpwd=os.getcwd()
-    os.chdir(repo+"../")
-    try:
-        sysassert(["createrepo", "."])
-    finally:
-        os.chdir(oldpwd)
-
-
-def write_rpmrc_file(path, string):
-    f=open(path, 'w')
-    try:
-        f.write(string)
-    finally:
-        f.close()
-
-def write_rpm_macros_file(path, topdir, release_dist):
-    f=open(path, 'w')
-    try:
-        f.write("%%_topdir	%s\n" % topdir)
-        f.write("%%dist	.%s\n" % release_dist)
-        f.write("%_use_internal_dependency_generator 0\n")
-    finally:
-        f.close()
 
 if __name__ == "__main__":
     main(sys.argv)
