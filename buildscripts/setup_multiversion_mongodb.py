@@ -77,16 +77,17 @@ class MultiVersionDownloader :
                % (self.platform.lower(), self.arch)
 
         attempts_remaining = 5
+        timeout_seconds = 10
         while True:
             try:
-                html = urllib2.urlopen(href, timeout=10).read()
+                html = urllib2.urlopen(href, timeout = timeout_seconds).read()
                 break
-            except:
-                print "fetching links failed, retrying..."
+            except Exception as e:
+                print "fetching links failed (%s), retrying..." % e
                 attempts_remaining -= 1
                 if attempts_remaining == 0 :
                     raise Exception("Failed to get links after multiple retries")
-           
+
         links = {}
         for line in html.split():
             match = re.compile("http:\/\/downloads\.mongodb\.org\/%s/mongodb-%s-%s-([^\"]*)\.tgz" \
