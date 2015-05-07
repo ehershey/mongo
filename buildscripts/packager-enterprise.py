@@ -30,9 +30,7 @@ import argparse
 import errno
 import getopt
 from glob import glob
-from packager import httpget, is_valid_file, ensure_dir, backtick, sysassert, \
-    crossproduct, make_deb, make_rpm, get_args, write_debian_changelog, \
-    make_rpm_repo, write_rpmrc_file, write_rpm_macros_file
+import packager
 import os
 import re
 import shutil
@@ -226,9 +224,9 @@ class Distro(object):
 
     def make_pkg(self, build_os, arch, spec, srcdir):
         if re.search("^(debian|ubuntu)", self.n):
-            return make_deb(self, build_os, arch, spec, srcdir)
+            return packager.make_deb(self, build_os, arch, spec, srcdir)
         elif re.search("^(suse|centos|redhat|fedora)", self.n):
-            return make_rpm(self, build_os, arch, spec, srcdir)
+            return packager.make_rpm(self, build_os, arch, spec, srcdir)
         else:
             raise Exception("BUG: unsupported platform?")
 
@@ -258,7 +256,7 @@ def main(argv):
 
     distros=[Distro(distro) for distro in DISTROS]
 
-    args = get_args(distros)
+    args = packager.get_args(distros)
 
     spec = Spec(args.server_version, args.metadata_gitspec, args.release_number)
 
@@ -280,17 +278,17 @@ def main(argv):
 
       # Build a package for each distro/spec/arch tuple, and
       # accumulate the repository-layout directories.
-      for (distro, arch) in crossproduct(distros, args.arches):
+      for (distro, arch) in packager.crossproduct(distros, args.arches):
 
           for build_os in distro.build_os():
             if build_os in args.distros or not args.distros:
 
               if args.tarball:
                 filename = tarfile(build_os, arch, spec)
-                ensure_dir(filename)
+                packager.ensure_dir(filename)
                 shutil.copyfile(args.tarball,filename)
               else:
-                httpget(urlfmt % (arch, build_os, spec.version()), ensure_dir(tarfile(build_os, arch, spec)))
+                packager.httpget(urlfmt % (arch, build_os, spec.version()), packager.ensure_dir(tarfile(build_os, arch, spec)))
 
               repo = make_package(distro, build_os, arch, spec, srcdir)
               make_repo(repo, distro, build_os, spec)
@@ -315,14 +313,14 @@ def setupdir(distro, build_os, arch, spec):
 def unpack_binaries_into(build_os, arch, spec, where):
     """Unpack the tarfile for (build_os, arch, spec) into directory where."""
     rootdir=os.getcwd()
-    ensure_dir(where)
+    packager.ensure_dir(where)
     # Note: POSIX tar doesn't require support for gtar's "-C" option,
     # and Python's tarfile module prior to Python 2.7 doesn't have the
     # features to make this detail easy.  So we'll just do the dumb
     # thing and chdir into where and run tar there.
     os.chdir(where)
     try:
-	sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec)])
+	packager.sysassert(["tar", "xvzf", rootdir+"/"+tarfile(build_os, arch, spec)])
     	release_dir = glob('mongodb-linux-*')[0]
         for releasefile in "bin", "snmp", "LICENSE.txt", "README", "THIRD-PARTY-NOTICES", "MPL-2":
             os.rename("%s/%s" % (release_dir, releasefile), releasefile)
@@ -339,14 +337,14 @@ def make_package(distro, build_os, arch, spec, srcdir):
     suffixes"""
 
     sdir=setupdir(distro, build_os, arch, spec)
-    ensure_dir(sdir)
+    packager.ensure_dir(sdir)
     # Note that the RPM packages get their man pages from the debian
     # directory, so the debian directory is needed in all cases (and
     # innocuous in the debianoids' sdirs).
     for pkgdir in ["debian", "rpm"]:
         print "Copying packaging files from %s to %s" % ("%s/%s" % (srcdir, pkgdir), sdir)
         # FIXME: sh-dash-cee is bad. See if tarfile can do this.
-        sysassert(["sh", "-c", "(cd \"%s\" && git archive %s %s/ ) | (cd \"%s\" && tar xvf -)" % (srcdir, spec.metadata_gitspec(), pkgdir, sdir)])
+        packager.sysassert(["sh", "-c", "(cd \"%s\" && git archive %s %s/ ) | (cd \"%s\" && tar xvf -)" % (srcdir, spec.metadata_gitspec(), pkgdir, sdir)])
     # Splat the binaries and snmp files under sdir.  The "build" stages of the
     # packaging infrastructure will move the files to wherever they
     # need to go.
@@ -362,7 +360,7 @@ def make_repo(repodir, distro, build_os, spec):
     if re.search("(debian|ubuntu)", repodir):
         make_deb_repo(repodir, distro, build_os, spec)
     elif re.search("(suse|centos|redhat|fedora)", repodir):
-        make_rpm_repo(repodir)
+        packager.make_rpm_repo(repodir)
     else:
         raise Exception("BUG: unsupported platform?")
 
@@ -372,12 +370,12 @@ def make_deb_repo(repo, distro, build_os, spec):
     oldpwd=os.getcwd()
     os.chdir(repo+"../../../../../../")
     try:
-        dirs=set([os.path.dirname(deb)[2:] for deb in backtick(["find", ".", "-name", "*.deb"]).split()])
+        dirs=set([os.path.dirname(deb)[2:] for deb in packager.backtick(["find", ".", "-name", "*.deb"]).split()])
         for d in dirs:
-            s=backtick(["dpkg-scanpackages", d, "/dev/null"])
+            s=packager.backtick(["dpkg-scanpackages", d, "/dev/null"])
             with open(d+"/Packages", "w") as f:
                 f.write(s)
-            b=backtick(["gzip", "-9c", d+"/Packages"])
+            b=packager.backtick(["gzip", "-9c", d+"/Packages"])
             with open(d+"/Packages.gz", "wb") as f:
                 f.write(b)
     finally:
@@ -399,7 +397,7 @@ Description: MongoDB packages
         os.unlink(repo+"../../Release.gpg")
     oldpwd=os.getcwd()
     os.chdir(repo+"../../")
-    s2=backtick(["apt-ftparchive", "release", "."])
+    s2=packager.backtick(["apt-ftparchive", "release", "."])
     try:
         with open("Release", 'w') as f:
             f.write(s)
@@ -432,7 +430,7 @@ def move_repos_into_place(src, dst):
 
     # Put the stuff in our new directory.
     for r in os.listdir(src):
-        sysassert(["cp", "-rv", src + "/" + r, dname])
+        packager.sysassert(["cp", "-rv", src + "/" + r, dname])
 
     # Make a symlink to the new directory; the symlink will be renamed
     # to dst shortly.
