@@ -273,7 +273,11 @@ tasks:
           mv mongodb-src-*.${ext|tgz} distsrc.${ext|tgz}
           mv mongodb-*-debugsymbols.${ext|tgz} mongo-debugsymbols.tgz || true
           mv mongodb-*.${ext|tgz} mongodb-binaries.tgz
-          if [ "${has_packages|}" = "true" ] ; then cd buildscripts ; ${python|python} ${packager_script} --prefix `pwd`/.. --distros ${packager_distro} --tarball `pwd`/../mongodb-binaries.tgz -s `cat ../version.txt` -m HEAD ; cd .. ; fi
+          if [ "${has_packages|}" = "true" ] ; then
+            cd buildscripts
+            ${python|python} ${packager_script} --prefix `pwd`/.. --distros ${packager_distro} --tarball `pwd`/../mongodb-binaries.tgz -s `cat ../version.txt` -m HEAD
+            cd ..
+          fi
     - command: archive.targz_pack
       params:
         target: "artifacts.tgz"
