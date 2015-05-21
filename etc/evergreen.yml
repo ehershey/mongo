@@ -1141,7 +1141,6 @@ tasks:
               popd
             done
           fi
-
           tar zcvf repo-${push_arch}.tgz repo || true
           rm signing_auth_token
 
