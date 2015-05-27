@@ -1124,8 +1124,7 @@ tasks:
           if [ "${has_packages|}" = "true" ] ; then
             for rpm in $(find repo/ -name \*.rpm) ; do
               pushd $(dirname $rpm)
-              notary-client.py --key-name "${signing_key_name}" --auth-token-file ./signing_auth_token --comment "MCI Automatic Signing ${revision} - ${build_variant} - ${branch_name}" --notary-url http://notary-service.build.10gen.cc:5000
---archive-file-ext gpg --outputs sig $(basename $rpm)
+              notary-client.py --key-name "${signing_key_name}" --auth-token-file ./signing_auth_token --comment "MCI Automatic Signing ${revision} - ${build_variant} - ${branch_name}" --notary-url http://notary-service.build.10gen.cc:5000 --archive-file-ext gpg --outputs sig $(basename $rpm)
               popd
             done
             for release_file in $(find repo/ -name Release) ; do
