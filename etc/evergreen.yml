@@ -1459,9 +1459,11 @@ tasks:
                'build_variants': ['enterprise-windows-64', 'windows-64', 'windows-64-2k8', 'windows-64-2k8-ssl', 'windows-32'], }
 
             #Package repo tarballs
-            - {'source': {'path': '${push_path}-STAGE/${push_name}/repo-${push_arch}-${task_id}.tgz', 'bucket': 'build-push-testing'},
-               'destination': {'path:' '${push_path}/repo-${push_arch}.tgz
-               'build_variants: ["ubuntu1204", "ubuntu1404", "amazon", "enterprise-rhel-57-64-bit", "enterprise-rhel-62-64-bit", "enterprise-rhel-70-64-bit", "rhel55", "rhel62", "rhel70", "enterprise-ubuntu1204-64", "enterprise-ubuntu1404-64", "enterprise-suse11-64", "suse11", "enterprise-debian71-64", "debian71"] }
+            - {'source': {'path': '${push_path}-STAGE/${push_name}/repo-${push_arch}-${task_id}.tgz',
+ 'bucket': 'build-push-testing'},
+               'destination': {'path': '${push_path}/repo-${push_arch}.tgz', 'bucket': '${push_bucket}'},
+               'build_variants': ["ubuntu1204", "ubuntu1404", "amazon", "enterprise-rhel-57-64-bit", "enterprise-rhel-62-64-bit", "enterprise-rhel-70-64-bit", "rhel55", "rhel62", "rhel70", "enterprise-ubuntu1204-64", "enterprise-ubuntu1404-64", "enterprise-suse11-64", "suse11", "enterprise-debian71-64", "debian71"] }
+
     - command: shell.exec
       params:
         working_dir: src
