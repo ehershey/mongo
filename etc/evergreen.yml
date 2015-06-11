@@ -273,9 +273,17 @@ tasks:
           mv mongodb-src-*.${ext|tgz} distsrc.${ext|tgz}
           mv mongodb-*-debugsymbols.${ext|tgz} mongo-debugsymbols.tgz || true
           mv mongodb-*.${ext|tgz} mongodb-binaries.tgz
+
+    - command: expansions.update
+      params:
+        file: src/compile_expansions.yml
+    - command: shell.exec
+      params:
+        working_dir: src
+        script: |
           if [ "${has_packages|}" = "true" ] ; then
             cd buildscripts
-            ${python|python} ${packager_script} --prefix `pwd`/.. --distros ${packager_distro} --tarball `pwd`/../mongodb-binaries.tgz -s `cat ../version.txt` -m HEAD
+            ${python|python} ${packager_script} --prefix `pwd`/.. --distros ${packager_distro} --tarball `pwd`/../mongodb-binaries.tgz -s ${version} -m HEAD
             cd ..
           fi
     - command: archive.targz_pack
@@ -449,7 +457,7 @@ tasks:
       resmoke_args: --suites=auth --storageEngine=wiredTiger
 
 - <<: *task_template
-  name: dbtest
+  name: push
   commands:
   - func: "do setup"
   - func: "run tests"
@@ -1080,7 +1088,7 @@ tasks:
     vars:
       resmoke_args: --suites=tool --storageEngine=wiredTiger
 
-- name: fakepush
+- name: dbtest
   depends_on:
   - name: "*"
   stepback: false
@@ -1616,7 +1624,7 @@ buildvariants:
   - name: sharding_jscore_passthrough_WT
   - name: tool
   - name: tool_WT
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -1893,7 +1901,7 @@ buildvariants:
   - name: sslSpecial
   - name: tool
   - name: tool_WT
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -1991,7 +1999,7 @@ buildvariants:
   - name: sslSpecial
   - name: tool
   - name: tool_WT
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -2045,7 +2053,7 @@ buildvariants:
   - name: snmp_WT
   - name: ssl
   - name: sslSpecial
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -2142,7 +2150,7 @@ buildvariants:
   - name: sslSpecial
   - name: tool
   - name: tool_WT
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -2180,7 +2188,7 @@ buildvariants:
   - name: replication
   - name: sharding
   - name: tool
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -2306,7 +2314,7 @@ buildvariants:
   - name: sharding_jscore_passthrough_WT
   - name: tool
   - name: tool_WT
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -2381,7 +2389,7 @@ buildvariants:
   - name: sharding_jscore_passthrough_WT
   - name: tool
   - name: tool_WT
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -2488,7 +2496,7 @@ buildvariants:
   - name: snmp_WT
   - name: ssl
   - name: sslSpecial
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -2567,7 +2575,7 @@ buildvariants:
   - name: tool_WT
   - name: ssl
   - name: sslSpecial
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -2608,7 +2616,7 @@ buildvariants:
   - name: replication
   - name: sharding
   - name: tool
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -2693,7 +2701,7 @@ buildvariants:
   - name: sharding_jscore_passthrough_WT
   - name: tool
   - name: tool_WT
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -2777,7 +2785,7 @@ buildvariants:
   - name: sslSpecial
   - name: tool
   - name: tool_WT
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -2864,7 +2872,7 @@ buildvariants:
   - name: snmp_WT
   - name: ssl
   - name: sslSpecial
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -2908,7 +2916,7 @@ buildvariants:
   - name: snmp_WT
   - name: ssl
   - name: sslSpecial
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -2947,7 +2955,7 @@ buildvariants:
   - name: snmp_WT
   - name: ssl
   - name: sslSpecial
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -3047,7 +3055,7 @@ buildvariants:
   - name: sslSpecial
   - name: tool
   - name: tool_WT
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -3145,7 +3153,7 @@ buildvariants:
   - name: sslSpecial
   - name: tool
   - name: tool_WT
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -3243,7 +3251,7 @@ buildvariants:
   - name: sslSpecial
   - name: tool
   - name: tool_WT
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -3288,7 +3296,7 @@ buildvariants:
   - name: snmp_WT
   - name: ssl
   - name: sslSpecial
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -3329,7 +3337,7 @@ buildvariants:
   - name: snmp_WT
   - name: ssl
   - name: sslSpecial
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -3374,7 +3382,7 @@ buildvariants:
   - name: snmp_WT
   - name: ssl
   - name: sslSpecial
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -3472,7 +3480,7 @@ buildvariants:
   - name: sslSpecial
   - name: tool
   - name: tool_WT
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -3545,7 +3553,7 @@ buildvariants:
   - name: slow2_WT
   - name: tool
   - name: tool_WT
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -3590,7 +3598,7 @@ buildvariants:
   - name: snmp_WT
   - name: ssl
   - name: sslSpecial
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -3688,7 +3696,7 @@ buildvariants:
   - name: sslSpecial
   - name: tool
   - name: tool_WT
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
 
@@ -3932,6 +3940,6 @@ buildvariants:
   - name: sslSpecial
   - name: tool
   - name: tool_WT
-  - name: fakepush
+  - name: push
     distros:
     - rhel55-test
