@@ -1565,6 +1565,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -1663,6 +1665,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -1739,6 +1743,8 @@ buildvariants:
   - name: aggregation_auth
   - name: auth
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: disk
   - name: durability
   - name: dur_jscore_passthrough
@@ -1844,6 +1850,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -1941,6 +1949,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -2037,6 +2047,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: failpoints_auth
   - name: jsCore_auth
@@ -2093,6 +2105,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -2185,6 +2199,8 @@ buildvariants:
   - name: aggregation
   - name: auth
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: disk
   - name: durability
   - name: failpoints
@@ -2223,6 +2239,8 @@ buildvariants:
   - name: aggregation
   - name: auth
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: disk
   - name: durability
   - name: failpoints
@@ -2266,6 +2284,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -2353,6 +2373,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -2427,6 +2449,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -2494,6 +2518,8 @@ buildvariants:
   - name: audit
   - name: audit_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: jsCore_auth
   - name: mmap
@@ -2537,6 +2563,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -2613,6 +2641,8 @@ buildvariants:
   - name: aggregation
   - name: auth
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: disk
   - name: durability
   - name: failpoints
@@ -2653,6 +2683,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -2735,6 +2767,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -2818,6 +2852,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -2870,6 +2906,8 @@ buildvariants:
   - name: audit
   - name: audit_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: jsCore_auth
   - name: mmap
@@ -2912,6 +2950,8 @@ buildvariants:
   - name: audit
   - name: audit_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: mmap
   - name: jsCore_auth
@@ -2953,6 +2993,8 @@ buildvariants:
   - name: audit
   - name: audit_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: jsCore_auth
   - name: mmap
@@ -2998,6 +3040,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -3096,6 +3140,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -3194,6 +3240,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -3294,6 +3342,8 @@ buildvariants:
   - name: audit
   - name: audit_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: jsCore_auth
   - name: mmap
@@ -3335,6 +3385,8 @@ buildvariants:
   - name: audit
   - name: audit_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: jsCore_auth
   - name: mmap
@@ -3380,6 +3432,8 @@ buildvariants:
   - name: audit
   - name: audit_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: jsCore_auth
   - name: replicasets_auth
@@ -3423,6 +3477,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -3525,6 +3581,8 @@ buildvariants:
   - name: concurrency_sharded
   - name: concurrency_sharded_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -3596,6 +3654,8 @@ buildvariants:
   - name: audit
   - name: audit_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: jsCore_auth
   - name: mmap
@@ -3639,6 +3699,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -3733,6 +3795,8 @@ buildvariants:
   - name: aggregation_auth
   - name: auth
   - name: dbtest
+    distros:
+    - rhel55-test
   # - name: disk
   # - name: durability
   # - name: dur_jscore_passthrough
@@ -3793,6 +3857,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
@@ -3883,6 +3949,8 @@ buildvariants:
   - name: auth
   - name: auth_WT
   - name: dbtest
+    distros:
+    - rhel55-test
   - name: dbtest_WT
   - name: disk
   - name: durability
