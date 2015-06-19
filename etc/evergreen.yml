@@ -284,8 +284,9 @@ tasks:
 
           #${asan_symbolizer} ${enable_lsan} ${rlp_environment} ${python|python} buildscripts/resmoke.py --jobs=${num_jobs_unittests|1} --suites=unittests ${test_flags} --log=buildlogger --reportFile=report.json
 
-          mv mongodb-src-*.${ext|tgz} distsrc.${ext|tgz}
+          #mv mongodb-src-*.${ext|tgz} distsrc.${ext|tgz}
           mv mongodb-*-debugsymbols.${ext|tgz} mongo-debugsymbols.tgz || true
+          touch distsrc.${ext|tgz}
           mv mongodb-*.${ext|tgz} mongodb-binaries.tgz
 
     - command: expansions.update
