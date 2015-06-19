@@ -282,7 +282,7 @@ tasks:
           curl https://s3.amazonaws.com/mciuploads/mongodb-mongo-master/${build_variant}/54e8c6b505d8a53014677ae0a1579695229022aa/artifacts/mongodb_mongo_master_"$underscore_bv"_54e8c6b505d8a53014677ae0a1579695229022aa_15_06_19_17_56_27.tgz > artifacts.tgz
           tar zxvf artifacts.tgz
 
-          ${asan_symbolizer} ${enable_lsan} ${rlp_environment} ${python|python} buildscripts/resmoke.py --jobs=${num_jobs_unittests|1} --suites=unittests ${test_flags} --log=buildlogger --reportFile=report.json
+          #${asan_symbolizer} ${enable_lsan} ${rlp_environment} ${python|python} buildscripts/resmoke.py --jobs=${num_jobs_unittests|1} --suites=unittests ${test_flags} --log=buildlogger --reportFile=report.json
 
           mv mongodb-src-*.${ext|tgz} distsrc.${ext|tgz}
           mv mongodb-*-debugsymbols.${ext|tgz} mongo-debugsymbols.tgz || true
