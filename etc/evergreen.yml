@@ -274,6 +274,8 @@ tasks:
           ${python|python} buildscripts/generate_compile_expansions.py version.json | \
             tee compile_expansions.yml
 
+          # if [ "${has_debugsymbols|}" = "true" ]; then ${scons|scons} ${compile_flags|} --nostrip --use-new-tools dist; original_filename=$(ls | grep debugsymbols); mv $original_filename $(echo $original_filename | sed 's/debugsymbols-//' | sed 's/mongodb/debugsymbols-mongodb/'); fi
+          # generates:
           # mongodb-linux-x86_64-debugsymbols-amazon-3.1.5-pre-.tgz
           curl https://s3.amazonaws.com/mciuploads/mongodb-mongo-master/${build_variant}/8990721add6d19a6228132be6f837f48b4391243/debugsymbols/debugsymbols-mongodb_mongo_master_"$underscore_bv"_8990721add6d19a6228132be6f837f48b4391243_15_06_11_21_06_54.tgz > mongodb-linux-x86_64-debugsymbols-${build_variant}-3.1.5-pre-.tgz
 
