@@ -263,10 +263,22 @@ tasks:
           set -o verbose
 
           rm -rf ${install_directory|/data/mongo-install-directory}
-          ${scons|scons} ${compile_flags|} --use-new-tools all dist dist-debugsymbols distsrc-${ext|tgz} ${msi_target|}
+
+          underscore_bv=$(echo ${build_variant} | tr - _)
+
+          #${scons|scons} ${compile_flags|} --use-new-tools all dist dist-debugsymbols distsrc-${ext|tgz} ${msi_target|}
+          # generates:
+          # mongodb-linux-x86_64-amazon-binaries.tgz
+          curl https://s3.amazonaws.com/mciuploads/mongodb-mongo-master/${build_variant}/8990721add6d19a6228132be6f837f48b4391243/binaries/mongo-mongodb_mongo_master_"$underscore_bv"_8990721add6d19a6228132be6f837f48b4391243_15_06_11_21_06_54.tgz >  mongodb-linux-x86_64-${build_variant}-binaries.tgz || true
 
           ${python|python} buildscripts/generate_compile_expansions.py version.json | \
             tee compile_expansions.yml
+
+          # mongodb-linux-x86_64-debugsymbols-amazon-3.1.5-pre-.tgz
+          curl https://s3.amazonaws.com/mciuploads/mongodb-mongo-master/${build_variant}/8990721add6d19a6228132be6f837f48b4391243/debugsymbols/debugsymbols-mongodb_mongo_master_"$underscore_bv"_8990721add6d19a6228132be6f837f48b4391243_15_06_11_21_06_54.tgz > mongodb-linux-x86_64-debugsymbols-${build_variant}-3.1.5-pre-.tgz
+
+          curl https://s3.amazonaws.com/mciuploads/mongodb-mongo-master/${build_variant}/8990721add6d19a6228132be6f837f48b4391243/artifacts/mongodb_mongo_master_"$underscore_bv"_8990721add6d19a6228132be6f837f48b4391243_15_06_11_21_06_54.tgz > artifacts.tgz
+          tar zxvf artifacts.tgz
 
           ${asan_symbolizer} ${enable_lsan} ${rlp_environment} ${python|python} buildscripts/resmoke.py --jobs=${num_jobs_unittests|1} --suites=unittests ${test_flags} --log=buildlogger --reportFile=report.json
 
