@@ -264,23 +264,27 @@ tasks:
 
           rm -rf ${install_directory|/data/mongo-install-directory}
 
-          underscore_bv=$(echo ${build_variant} | tr - _)
+          underscore_bv=$(echo ${build_variant} | tr - _) # UNDO THIS
 
           #${scons|scons} ${compile_flags|} --use-new-tools all dist dist-debugsymbols distsrc-${ext|tgz} ${msi_target|}
-          # generates:
-          # mongodb-linux-x86_64-amazon-binaries.tgz
-          curl https://s3.amazonaws.com/mciuploads/mongodb-mongo-master/${build_variant}/54e8c6b505d8a53014677ae0a1579695229022aa/binaries/mongo-mongodb_mongo_master_"$underscore_bv"_54e8c6b505d8a53014677ae0a1579695229022aa_15_06_19_17_56_27.tgz >  mongodb-linux-x86_64-${build_variant}-binaries.tgz || true
+          # generates: # UNDO THIS
+          # mongodb-linux-x86_64-amazon-binaries.tgz # UNDO THIS
+          curl https://s3.amazonaws.com/mciuploads/mongodb-mongo-master/${build_variant}/54e8c6b505d8a53014677ae0a1579695229022aa/binaries/mongo-mongodb_mongo_master_"$underscore_bv"_54e8c6b505d8a53014677ae0a1579695229022aa_15_06_19_17_56_27.tgz >  mongodb-linux-x86_64-${build_variant}-binaries.tgz || true # UNDO THIS
 
           ${python|python} buildscripts/generate_compile_expansions.py version.json | \
             tee compile_expansions.yml
 
           # if [ "${has_debugsymbols|}" = "true" ]; then ${scons|scons} ${compile_flags|} --nostrip --use-new-tools dist; original_filename=$(ls | grep debugsymbols); mv $original_filename $(echo $original_filename | sed 's/debugsymbols-//' | sed 's/mongodb/debugsymbols-mongodb/'); fi
-          # generates:
-          # mongodb-linux-x86_64-debugsymbols-amazon-3.1.5-pre-.tgz
-          curl https://s3.amazonaws.com/mciuploads/mongodb-mongo-master/${build_variant}/54e8c6b505d8a53014677ae0a1579695229022aa/debugsymbols/debugsymbols-mongodb_mongo_master_"$underscore_bv"_54e8c6b505d8a53014677ae0a1579695229022aa_15_06_19_17_56_27.tgz > mongodb-linux-x86_64-debugsymbols-${build_variant}-3.1.5-pre-.tgz
+          # generates: # UNDO THIS
+          # mongodb-linux-x86_64-debugsymbols-amazon-3.1.5-pre-.tgz # UNDO THIS
+          curl https://s3.amazonaws.com/mciuploads/mongodb-mongo-master/${build_variant}/54e8c6b505d8a53014677ae0a1579695229022aa/debugsymbols/debugsymbols-mongodb_mongo_master_"$underscore_bv"_54e8c6b505d8a53014677ae0a1579695229022aa_15_06_19_17_56_27.tgz > debugsymbols-mongodb-linux-x86_64-debugsymbols-${build_variant}-3.1.5-pre-.tgz # UNDO THIS
 
-          curl https://s3.amazonaws.com/mciuploads/mongodb-mongo-master/${build_variant}/54e8c6b505d8a53014677ae0a1579695229022aa/artifacts/mongodb_mongo_master_"$underscore_bv"_54e8c6b505d8a53014677ae0a1579695229022aa_15_06_19_17_56_27.tgz > artifacts.tgz
-          tar zxvf artifacts.tgz
+          curl https://s3.amazonaws.com/mciuploads/mongodb-mongo-master/${build_variant}/54e8c6b505d8a53014677ae0a1579695229022aa/artifacts/mongodb_mongo_master_"$underscore_bv"_54e8c6b505d8a53014677ae0a1579695229022aa_15_06_19_17_56_27.tgz > artifacts.tgz # UNDO THIS
+          cp buildscripts/packager.py buildscripts/packager.py.orig # UNDO THIS
+          cp buildscripts/packager-enterprise.py buildscripts/packager-enterprise.py.orig # UNDO THIS
+          tar zxvf artifacts.tgz # UNDO THIS
+          cp buildscripts/packager.py.orig buildscripts/packager.py # UNDO THIS
+          cp buildscripts/packager-enterprise.py.orig buildscripts/packager-enterprise.py # UNDO THIS
 
           #${asan_symbolizer} ${enable_lsan} ${rlp_environment} ${python|python} buildscripts/resmoke.py --jobs=${num_jobs_unittests|1} --suites=unittests ${test_flags} --log=buildlogger --reportFile=report.json
 
