@@ -290,6 +290,7 @@ tasks:
 
           #mv mongodb-src-*.${ext|tgz} distsrc.${ext|tgz}
           mv mongodb-*-debugsymbols.${ext|tgz} mongo-debugsymbols.tgz || true
+          mv debugsymbols-mongodb-*.${ext|tgz} mongo-debugsymbols.tgz || true
           touch distsrc.${ext|tgz}
           mv mongodb-*.${ext|tgz} mongodb-binaries.tgz
 
