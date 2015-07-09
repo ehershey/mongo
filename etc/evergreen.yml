@@ -1403,6 +1403,27 @@ tasks:
         aws_key: ${aws_key}
         aws_secret: ${aws_secret}
         s3_copy_files:
+            #Package repo tarballs
+            - {'source': {'path': '${push_path}-STAGE/${push_name}/repo-${push_arch}-${task_id}.tgz', 'bucket': 'build-push-testing'},
+               'destination': {'path': '${push_path}/repo2-${push_arch}-${suffix}.tgz', 'bucket': '${push_bucket}'},
+               'build_variants': [
+                 "ubuntu1204",
+                 "ubuntu1404",
+                 "amazon",
+                 "enterprise-rhel-57-64-bit",
+                 "enterprise-rhel-62-64-bit",
+                 "enterprise-rhel-70-64-bit",
+                 "rhel55",
+                 "rhel62",
+                 "rhel70",
+                 "enterprise-ubunt  u1204-64",
+                 "enterprise-ubuntu1404-64",
+                 "enterprise-suse11-64",
+                 "suse11",
+                 "enterprise-debian71-64",
+                 "debian71"],
+                 }
+
             #Binaries
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-${push_name}-${push_arch}-${suffix}-${task_id}.${ext|tgz}', 'bucket': 'build-push-testing'},
                'destination': {'path': '${push_path}/mongodb-${push_name}-${push_arch}-${suffix}.${ext|tgz}', 'bucket': '${push_bucket}'}}
@@ -1502,27 +1523,6 @@ tasks:
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-win32-${push_arch}-${suffix}-${task_id}-signed.msi.md5', 'bucket': 'build-push-testing'},
                'destination': {'path': '${push_path}/mongodb-win32-${push_arch}-${suffix}-signed.msi.md5', 'bucket': '${push_bucket}'},
                'build_variants': ['enterprise-windows-64', 'windows-64', 'windows-64-2k8', 'windows-64-2k8-ssl', 'windows-32'], }
-
-            #Package repo tarballs
-            - {'source': {'path': '${push_path}-STAGE/${push_name}/repo-${push_arch}-${task_id}.tgz', 'bucket': 'build-push-testing'},
-               'destination': {'path': '${push_path}/repo-${push_arch}-${suffix}.tgz', 'bucket': '${push_bucket}'},
-               'build_variants': [
-                 "ubuntu1204",
-                 "ubuntu1404",
-                 "amazon",
-                 "enterprise-rhel-57-64-bit",
-                 "enterprise-rhel-62-64-bit",
-                 "enterprise-rhel-70-64-bit",
-                 "rhel55",
-                 "rhel62",
-                 "rhel70",
-                 "enterprise-ubunt  u1204-64",
-                 "enterprise-ubuntu1404-64",
-                 "enterprise-suse11-64",
-                 "suse11",
-                 "enterprise-debian71-64",
-                 "debian71"],
-                 }
 
 #######################################
 #               Modules               #
