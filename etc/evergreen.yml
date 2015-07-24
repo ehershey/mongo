@@ -58,6 +58,23 @@ variables:
   - solaris-64-bit
   - osx
 
+- &packaging_variants
+  - enterprise-rhel-57-64-bit
+  - enterprise-rhel-62-64-bit
+  - enterprise-rhel-70-64-bit
+  - enterprise-suse11-64
+  - enterprise-ubuntu1204-64
+  - enterprise-ubuntu1404-64
+  - enterprise-debian71-64
+  - rhel55
+  - rhel62
+  - rhel70
+  - suse11
+  - ubuntu1204
+  - ubuntu1404
+  - amazon
+  - debian71
+
 #######################################
 #            Functions                #
 #######################################
@@ -1382,7 +1399,8 @@ tasks:
       params:
         aws_key: ${aws_key}
         aws_secret: ${aws_secret}
-        build_variants: ["ubuntu1204", "ubuntu1404", "amazon", "enterprise-rhel-57-64-bit", "enterprise-rhel-62-64-bit", "enterprise-rhel-70-64-bit", "rhel55", "rhel62", "rhel70", "enterprise-ubuntu1204-64", "enterprise-ubuntu1404-64", "enterprise-suse11-64", "suse11", "enterprise-debian71-64", "debian71"]
+        build_variants:
+          *debug_symbol_variants
         local_file: src/repo-${push_arch}.tgz
         bucket: build-push-testing
         permissions: public-read
@@ -1397,22 +1415,8 @@ tasks:
             #Package repo tarballs
             - {'source': {'path': '${push_path}-STAGE/${push_name}/repo-${push_arch}-${task_id}.tgz', 'bucket': 'build-push-testing'},
                'destination': {'path': 'packages/repo-${push_arch}-${suffix}.tgz', 'bucket': '${push_bucket}'},
-               'build_variants': [
-                 "ubuntu1204",
-                 "ubuntu1404",
-                 "amazon",
-                 "enterprise-rhel-57-64-bit",
-                 "enterprise-rhel-62-64-bit",
-                 "enterprise-rhel-70-64-bit",
-                 "rhel55",
-                 "rhel62",
-                 "rhel70",
-                 "enterprise-ubunt  u1204-64",
-                 "enterprise-ubuntu1404-64",
-                 "enterprise-suse11-64",
-                 "suse11",
-                 "enterprise-debian71-64",
-                 "debian71"],
+                build_variants:
+                  *debug_symbol_variants
                  }
 
             #Binaries
