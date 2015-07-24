@@ -1396,7 +1396,7 @@ tasks:
         s3_copy_files:
             #Package repo tarballs
             - {'source': {'path': '${push_path}-STAGE/${push_name}/repo-${push_arch}-${task_id}.tgz', 'bucket': 'build-push-testing'},
-               'destination': {'path': '${push_path}/repo-${push_arch}-${suffix}.tgz', 'bucket': '${push_bucket}'},
+               'destination': {'path': 'packages/repo-${push_arch}-${suffix}.tgz', 'bucket': '${push_bucket}'},
                'build_variants': [
                  "ubuntu1204",
                  "ubuntu1404",
