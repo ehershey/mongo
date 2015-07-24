@@ -264,34 +264,17 @@ tasks:
 
           rm -rf ${install_directory|/data/mongo-install-directory}
 
-          underscore_bv=$(echo ${build_variant} | tr - _) # UNDO THIS
-
-          #${scons|scons} ${compile_flags|} --use-new-tools all dist dist-debugsymbols distsrc-${ext|tgz} ${msi_target|}
-          # generates: # UNDO THIS
-          # mongodb-linux-x86_64-amazon-binaries.tgz # UNDO THIS
-          curl https://s3.amazonaws.com/mciuploads/mongodb-mongo-master/${build_variant}/54e8c6b505d8a53014677ae0a1579695229022aa/binaries/mongo-mongodb_mongo_master_"$underscore_bv"_54e8c6b505d8a53014677ae0a1579695229022aa_15_06_19_17_56_27.tgz >  mongodb-linux-x86_64-${build_variant}-binaries.tgz || true # UNDO THIS
+          ${scons|scons} ${compile_flags|} --use-new-tools all dist dist-debugsymbols distsrc-${ext|tgz} ${msi_target|}
 
           ${python|python} buildscripts/generate_compile_expansions.py version.json | \
             tee compile_expansions.yml
 
-          # if [ "${has_debugsymbols|}" = "true" ]; then ${scons|scons} ${compile_flags|} --nostrip --use-new-tools dist; original_filename=$(ls | grep debugsymbols); mv $original_filename $(echo $original_filename | sed 's/debugsymbols-//' | sed 's/mongodb/debugsymbols-mongodb/'); fi
-          # generates: # UNDO THIS
-          # mongodb-linux-x86_64-debugsymbols-amazon-3.1.5-pre-.tgz # UNDO THIS
-          curl https://s3.amazonaws.com/mciuploads/mongodb-mongo-master/${build_variant}/54e8c6b505d8a53014677ae0a1579695229022aa/debugsymbols/debugsymbols-mongodb_mongo_master_"$underscore_bv"_54e8c6b505d8a53014677ae0a1579695229022aa_15_06_19_17_56_27.tgz > debugsymbols-mongodb-linux-x86_64-debugsymbols-${build_variant}-3.1.5-pre-.tgz # UNDO THIS
+          if [ "${has_debugsymbols|}" = "true" ]; then ${scons|scons} ${compile_flags|} --nostrip --use-new-tools dist; original_filename=$(ls | grep debugsymbols); mv $original_filename $(echo $original_filename | sed 's/debugsymbols-//' | sed 's/mongodb/debugsymbols-mongodb/'); fi
 
-          curl https://s3.amazonaws.com/mciuploads/mongodb-mongo-master/${build_variant}/54e8c6b505d8a53014677ae0a1579695229022aa/artifacts/mongodb_mongo_master_"$underscore_bv"_54e8c6b505d8a53014677ae0a1579695229022aa_15_06_19_17_56_27.tgz > artifacts.tgz # UNDO THIS
-          cp buildscripts/packager.py buildscripts/packager.py.orig # UNDO THIS
-          cp buildscripts/packager-enterprise.py buildscripts/packager-enterprise.py.orig # UNDO THIS
-          tar zxvf artifacts.tgz # UNDO THIS
-          cp buildscripts/packager.py.orig buildscripts/packager.py # UNDO THIS
-          cp buildscripts/packager-enterprise.py.orig buildscripts/packager-enterprise.py # UNDO THIS
+          ${asan_symbolizer} ${enable_lsan} ${rlp_environment} ${python|python} buildscripts/resmoke.py --jobs=${num_jobs_unittests|1} --suites=unittests ${test_flags} --log=buildlogger --reportFile=report.json
 
-          #${asan_symbolizer} ${enable_lsan} ${rlp_environment} ${python|python} buildscripts/resmoke.py --jobs=${num_jobs_unittests|1} --suites=unittests ${test_flags} --log=buildlogger --reportFile=report.json
-
-          #mv mongodb-src-*.${ext|tgz} distsrc.${ext|tgz}
-          mv mongodb-*-debugsymbols.${ext|tgz} mongo-debugsymbols.tgz || true
+          mv mongodb-src-*.${ext|tgz} distsrc.${ext|tgz}
           mv debugsymbols-mongodb-*.${ext|tgz} mongo-debugsymbols.tgz || true
-          touch distsrc.${ext|tgz}
           mv mongodb-*.${ext|tgz} mongodb-binaries.tgz
 
     - command: expansions.update
@@ -1413,7 +1396,7 @@ tasks:
         s3_copy_files:
             #Package repo tarballs
             - {'source': {'path': '${push_path}-STAGE/${push_name}/repo-${push_arch}-${task_id}.tgz', 'bucket': 'build-push-testing'},
-               'destination': {'path': '${push_path}/repo2-${push_arch}-${suffix}.tgz', 'bucket': '${push_bucket}'},
+               'destination': {'path': '${push_path}/repo-${push_arch}-${suffix}.tgz', 'bucket': '${push_bucket}'},
                'build_variants': [
                  "ubuntu1204",
                  "ubuntu1404",
@@ -1567,7 +1550,7 @@ buildvariants:
     gitvars: LD_LIBRARY_PATH=/opt/openssl/lib64 #needed to workaround the old openSSL on rhel55 builders.
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     push_path: linux
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: linux
     push_arch: x86_64
     compile_flags: -j$(grep -c ^processor /proc/cpuinfo) CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++ --release
@@ -1668,7 +1651,7 @@ buildvariants:
     gitvars: LD_LIBRARY_PATH=/opt/openssl/lib64 #needed to workaround the old openSSL on rhel55 builders.
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     push_path: linux
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: linux-debug
     push_arch: x86_64
     num_cores: $(grep -c ^processor /proc/cpuinfo)
@@ -1748,7 +1731,7 @@ buildvariants:
     gitvars: LD_LIBRARY_PATH=/opt/openssl/lib64 #needed to workaround the old openSSL on rhel55 builders.
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     push_path: linux
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: linux-duroff
     push_arch: x86_64
     compile_flags: -j$(grep -c ^processor /proc/cpuinfo) CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -1850,7 +1833,7 @@ buildvariants:
   expansions:
     tooltags: "-tags ssl"
     push_path: linux
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: linux
     push_arch: x86_64-ubuntu1204
     compile_flags: --ssl --distmod=ubuntu1204 -j$(grep -c ^processor /proc/cpuinfo) --release CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -1949,7 +1932,7 @@ buildvariants:
   expansions:
     tooltags: "-tags ssl"
     push_path: linux
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: linux
     push_arch: x86_64-ubuntu1404
     compile_flags: --ssl --distmod=ubuntu1404 -j$(grep -c ^processor /proc/cpuinfo) --release CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -2050,7 +2033,7 @@ buildvariants:
   expansions:
     tooltags: "-tags 'ssl sasl'"
     push_path: linux
-    push_bucket: downloads-test.10gen.com
+    push_bucket: downloads.10gen.com
     push_name: linux
     push_arch: x86_64-enterprise-amzn64
     compile_flags: --ssl --distmod=amzn64 --release -j$(grep -c ^processor /proc/cpuinfo) CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -2105,7 +2088,7 @@ buildvariants:
   expansions:
     tooltags: "-tags 'ssl'"
     push_path: linux
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: linux
     push_arch: x86_64-amazon
     compile_flags: --ssl --distmod=amazon -j$(grep -c ^processor /proc/cpuinfo) --release CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -2205,7 +2188,7 @@ buildvariants:
     gitvars: LD_LIBRARY_PATH=/opt/openssl/lib64 #needed to workaround the old openSSL on rhel55 builders.
     gorootvars: GOROOT=/opt/go32 PATH=/opt/go32/bin:$PATH
     push_path: linux
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: linux
     push_arch: i686
     compile_flags: --release --distarch=i686 -j$(grep -c ^processor /proc/cpuinfo) CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++ --wiredtiger=off CCFLAGS="-m32" LINKFLAGS="-m32"
@@ -2245,7 +2228,7 @@ buildvariants:
     gitvars: LD_LIBRARY_PATH=/opt/openssl/lib64 #needed to workaround the old openSSL on rhel55 builders.
     gorootvars: GOROOT=/opt/go32 PATH=/opt/go32/bin:$PATH
     push_path: linux
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: linux-debug
     push_arch: i686
     num_cores: $(grep -c ^processor /proc/cpuinfo)
@@ -2285,7 +2268,7 @@ buildvariants:
   expansions:
     exe: ".exe"
     push_path: win32
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: win32
     push_arch: x86_64
     msi_target: msi
@@ -2374,7 +2357,7 @@ buildvariants:
   expansions:
     exe: ".exe"
     push_path: win32
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: win32
     push_arch: x86_64-2008plus
     msi_target: msi
@@ -2451,7 +2434,7 @@ buildvariants:
   expansions:
     exe: ".exe"
     push_path: win32
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: win32-debug
     push_arch: x86_64-2008plus
     content_type: application/zip
@@ -2521,7 +2504,7 @@ buildvariants:
     exe: ".exe"
     gorootvars: 'PATH="/cygdrive/c/mingw-w64/x86_64-4.9.1-posix-seh-rt_v3-rev1/mingw64/bin:/cygdrive/c/sasl/:$PATH"'
     push_path: win32
-    push_bucket: downloads-test.10gen.com
+    push_bucket: downloads.10gen.com
     push_name: win32
     push_arch: x86_64-enterprise-windows-64
     msi_target: msi
@@ -2564,7 +2547,7 @@ buildvariants:
     gorootvars: 'PATH="/cygdrive/c/mingw-w64/x86_64-4.9.1-posix-seh-rt_v3-rev1/mingw64/bin:/cygdrive/c/sasl/:$PATH"'
     tooltags: "-tags ssl"
     push_path: win32
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: win32
     push_arch: x86_64-2008plus-ssl
     msi_target: msi
@@ -2644,7 +2627,7 @@ buildvariants:
     exe: ".exe"
     gorootvars: GOARCH=386
     push_path: win32
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: win32
     push_arch: i386
     msi_target: msi
@@ -2689,7 +2672,7 @@ buildvariants:
   - osx-108
   expansions:
     push_path: osx
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: osx
     push_arch: x86_64
     compile_flags: --allocator=system -j$(sysctl -n hw.logicalcpu) --release --osx-version-min=10.7 --libc++
@@ -2772,7 +2755,7 @@ buildvariants:
   - osx-108
   expansions:
     push_path: osx
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: osx-ssl
     push_arch: x86_64
     tooltags: "-tags ssl"
@@ -2858,7 +2841,7 @@ buildvariants:
   - osx-108
   expansions:
     push_path: osx
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: osx-debug
     push_arch: x86_64
     num_cores: $(sysctl -n hw.logicalcpu)
@@ -2908,7 +2891,7 @@ buildvariants:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags 'ssl sasl'"
     push_path: linux
-    push_bucket: downloads-test.10gen.com
+    push_bucket: downloads.10gen.com
     push_name: linux
     push_arch: x86_64-enterprise-rhel57
     compile_flags: --ssl --distmod=rhel57 -j$(grep -c ^processor /proc/cpuinfo) --release CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -2952,7 +2935,7 @@ buildvariants:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags 'ssl sasl'"
     push_path: linux
-    push_bucket: downloads-test.10gen.com
+    push_bucket: downloads.10gen.com
     push_name: linux
     push_arch: x86_64-enterprise-rhel62
     rlp_environment: MONGOD_UNITTEST_RLP_LANGUAGE_TEST_BTROOT=/opt/basis
@@ -2998,7 +2981,7 @@ buildvariants:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags 'ssl sasl'"
     push_path: linux
-    push_bucket: downloads-test.10gen.com
+    push_bucket: downloads.10gen.com
     push_name: linux
     push_arch: x86_64-enterprise-rhel70
     compile_flags: --ssl --distmod=rhel70 -j$(grep -c ^processor /proc/cpuinfo) --release CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -3040,7 +3023,7 @@ buildvariants:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags 'ssl sasl'"
     push_path: linux
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: linux
     push_arch: x86_64-rhel55
     compile_flags: --ssl --distmod=rhel55 -j$(grep -c ^processor /proc/cpuinfo) --release CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -3140,7 +3123,7 @@ buildvariants:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags ssl"
     push_path: linux
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: linux
     push_arch: x86_64-rhel62
     compile_flags: --ssl --distmod=rhel62 -j$(grep -c ^processor /proc/cpuinfo) --release CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -3240,7 +3223,7 @@ buildvariants:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags ssl"
     push_path: linux
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: linux
     push_arch: x86_64-rhel70
     compile_flags: --ssl --distmod=rhel70 -j$(grep -c ^processor /proc/cpuinfo) --release CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -3345,7 +3328,7 @@ buildvariants:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags 'ssl sasl'"
     push_path: linux
-    push_bucket: downloads-test.10gen.com
+    push_bucket: downloads.10gen.com
     push_name: linux
     push_arch: x86_64-enterprise-ubuntu1204
     compile_flags: --ssl --distmod=ubuntu1204 --release -j$(grep -c ^processor /proc/cpuinfo) CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -3388,7 +3371,7 @@ buildvariants:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags 'ssl sasl'"
     push_path: linux
-    push_bucket: downloads-test.10gen.com
+    push_bucket: downloads.10gen.com
     push_name: linux
     push_arch: x86_64-enterprise-ubuntu1404
     compile_flags: --ssl --distmod=ubuntu1404 --release -j$(grep -c ^processor /proc/cpuinfo) CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -3435,7 +3418,7 @@ buildvariants:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags 'ssl sasl'"
     push_path: linux
-    push_bucket: downloads-test.10gen.com
+    push_bucket: downloads.10gen.com
     push_name: linux
     push_arch: x86_64-enterprise-suse11
     compile_flags: --ssl --distmod=suse11 --release -j$(grep -c ^processor /proc/cpuinfo) CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -3477,7 +3460,7 @@ buildvariants:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags ssl"
     push_path: linux
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: linux
     push_arch: x86_64-suse11
     compile_flags: --ssl --distmod=suse11 -j$(grep -c ^processor /proc/cpuinfo) --release CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -3579,7 +3562,7 @@ buildvariants:
   - solaris
   expansions:
     push_path: sunos5
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: sunos5
     push_arch: x86_64
     compile_flags: CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++ -j$(kstat cpu | sort -u | grep -c "^module") --release CCFLAGS="-m64" LINKFLAGS="-m64 -static-libstdc++ -static-libgcc" OBJCOPY=/opt/mongodbtoolchain/bin/objcopy
@@ -3657,7 +3640,7 @@ buildvariants:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags 'ssl sasl'"
     push_path: linux
-    push_bucket: downloads-test.10gen.com
+    push_bucket: downloads.10gen.com
     push_name: linux
     push_arch: x86_64-enterprise-debian71
     compile_flags: --ssl --distmod=debian71 --release -j$(grep -c ^processor /proc/cpuinfo) CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -3699,7 +3682,7 @@ buildvariants:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags ssl"
     push_path: linux
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: linux
     push_arch: x86_64-debian71
     compile_flags: --ssl --distmod=debian71 -j$(grep -c ^processor /proc/cpuinfo) --release CC=/opt/mongodbtoolchain/bin/gcc CXX=/opt/mongodbtoolchain/bin/g++
@@ -3956,7 +3939,7 @@ buildvariants:
     num_jobs_unittests: $(grep -c ^processor /proc/cpuinfo)
     test_flags: --continueOnFailure
     push_path: linux
-    push_bucket: downloads-test.mongodb.org
+    push_bucket: downloads.mongodb.org
     push_name: linux
     push_arch: x86_64-ubuntu1410-clang
   tasks:
