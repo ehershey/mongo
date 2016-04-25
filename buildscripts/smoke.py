@@ -294,6 +294,8 @@ class mongod(NullMongod):
             # see: MSDN - Process Creation Flags - ms684863
             CREATE_BREAKAWAY_FROM_JOB = 0x01000000
 
+            print("argv: ")
+            print(argv)
             proc = Popen(argv, creationflags=CREATE_BREAKAWAY_FROM_JOB)
 
             self.job_object = win32job.CreateJobObject(None, '')

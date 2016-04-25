@@ -88,7 +88,8 @@ functions:
     params:
       aws_key: ${aws_key}
       aws_secret: ${aws_secret}
-      remote_file: mongodb-mongo-v3.0/${build_variant}/${revision}/binaries/mongo-${build_id}.${ext|tgz}
+      #remote_file: mongodb-mongo-v3.0/${build_variant}/${revision}/binaries/mongo-${build_id}.${ext|tgz}
+      remote_file: mongodb-mongo-v3.0/enterprise-windows-64/a878b57a5f5e45fb68560e8a9eb2247cf1e0d4b8/binaries/mongo-mongodb_mongo_v3.0_enterprise_windows_64_a878b57a5f5e45fb68560e8a9eb2247cf1e0d4b8_16_04_25_21_52_29.zip
       bucket: mciuploads
       local_file: src/mongo-binaries.tgz
 
@@ -138,7 +139,7 @@ functions:
     params:
       aws_key: ${aws_key}
       aws_secret: ${aws_secret}
-      remote_file: mongodb-mongo-v3.0/${build_variant}/${revision}/artifacts/${build_id}.tgz
+      remote_file: mongodb-mongo-v3.0/enterprise-windows-64/a878b57a5f5e45fb68560e8a9eb2247cf1e0d4b8/artifacts/mongodb_mongo_v3.0_enterprise_windows_64_a878b57a5f5e45fb68560e8a9eb2247cf1e0d4b8_16_04_25_21_52_29.tgz
       bucket: mciuploads
       extract_to: src
 
@@ -239,106 +240,31 @@ tasks:
         directory: src
     - func: "get buildnumber"
     - func: "setup credentials"
-    - func: "build new tools" #noop if ${newtools} is not "true"
-    - func: "build rocksdb" # noop if ${build_rocksdb} is not "true"
     - command: shell.exec
       type: test
       params:
         working_dir: src
         script: |
-          set -o errexit
-          set -o verbose
+          #set -o errexit
+          #set -o verbose
+#
+          #export MONGO_USE_BUILDLOGGER="true"
+          #export MONGO_BUILDER_NAME=MCI_${build_variant}
+          #export MONGO_BUILD_NUMBER=${builder_num|}
+          #export BUILDLOGGER_URL=${logger_url|https://logkeeper.mongodb.org/}
+          #export BUILDLOGGER_CREDENTIALS=./mci.buildlogger
+          #export MONGO_PHASE="${task_name}_${execution}"
 
-          export MONGO_USE_BUILDLOGGER="true"
-          export MONGO_BUILDER_NAME=MCI_${build_variant}
-          export MONGO_BUILD_NUMBER=${builder_num|}
-          export BUILDLOGGER_URL=${logger_url|https://logkeeper.mongodb.org/}
-          export BUILDLOGGER_CREDENTIALS=./mci.buildlogger
-          export MONGO_PHASE="${task_name}_${execution}"
+          #rm -rf ${install_directory|/data/mongo-install-directory}
+          #${scons|scons} ${compile_flags|} --use-new-tools all dist dist-debugsymbols distsrc-${ext|tgz} ${msi_target|}
 
-          rm -rf ${install_directory|/data/mongo-install-directory}
-          ${scons|scons} ${compile_flags|} --use-new-tools all dist dist-debugsymbols distsrc-${ext|tgz} ${msi_target|}
+          #${gitvars} git describe | ${python|python} buildscripts/generate_compile_expansions.py | tee compile_expansions.yml
 
-          ${gitvars} git describe | ${python|python} buildscripts/generate_compile_expansions.py | tee compile_expansions.yml
+          #${asan_symbolizer} ${enable_lsan} ${python|python} buildscripts/smoke.py --with-cleanbb --mode files --from-file build/unittests.txt --dont-start-mongod  --report-file report.json core
 
-          ${asan_symbolizer} ${enable_lsan} ${python|python} buildscripts/smoke.py --with-cleanbb --mode files --from-file build/unittests.txt --dont-start-mongod  --report-file report.json core
-
-          mv mongodb-src-*.${ext|tgz} distsrc.${ext|tgz}
-          mv mongodb-*-debugsymbols.${ext|tgz} mongo-debugsymbols.tgz || true
-          mv mongodb-*.${ext|tgz} mongodb-binaries.tgz
-
-    - command: expansions.update
-      params:
-        file: src/compile_expansions.yml
-    - command: shell.exec
-      params:
-        working_dir: src
-        script: |
-          set -o errexit
-          set -o verbose
-
-          if [ "${has_packages|}" = "true" ] ; then
-            cd buildscripts
-            ${python|python} ${packager_script} --prefix `pwd`/.. --distros ${packager_distro} --tarball `pwd`/../mongodb-binaries.tgz -s ${version} -m HEAD
-            cd ..
-          fi
-    - command: archive.targz_pack
-      params:
-        target: "artifacts.tgz"
-        source_dir: "src"
-        include:
-          - "src/mongo/db/modules/enterprise/jstests/**"
-          - "compile_expansions.yml"
-          - "src/mongo/db/modules/subscription/jstests/**"
-          - "src/mongo/db/modules/enterprise/docs/**"
-          - "*.exe"
-          - "jstests/**"
-          - "./test*"
-          - "./dbtest*"
-          - "./mongobridge*"
-          - "buildscripts/**"
-          - "*Example"
-          - "*Test"
-          - "./**.pdb"
-          - "./**.msi"
-          - "./etc/*san.suppressions"
-          - "repo/**"
-        exclude_files:
-          - "*_test.pdb"
-    - func: "upload debugsymbols"
-    - command: s3.put
-      params:
-        aws_key: ${aws_key}
-        aws_secret: ${aws_secret}
-        local_file: src/mongodb-binaries.tgz
-        remote_file: mongodb-mongo-v3.0/${build_variant}/${revision}/binaries/mongo-${build_id}.${ext|tgz}
-        bucket: mciuploads
-        permissions: public-read
-        content_type: ${content_type|application/x-gzip}
-        display_name: Binaries
-    - command: s3.put
-      params:
-        aws_key: ${aws_key}
-        aws_secret: ${aws_secret}
-        local_file: artifacts.tgz
-        remote_file: mongodb-mongo-v3.0/${build_variant}/${revision}/artifacts/${build_id}.tgz
-        bucket: mciuploads
-        permissions: public-read
-        content_type: application/tar
-        display_name: Artifacts
-    - command: s3.put
-      params:
-        aws_key: ${aws_key}
-        aws_secret: ${aws_secret}
-        local_file: src/distsrc.${ext|tgz}
-        remote_file: mongodb-mongo-master/${build_variant}/${revision}/sources/mongo-src-${build_id}.${ext|tgz}
-        bucket: mciuploads
-        permissions: public-read
-        content_type: ${content_type|application/x-gzip}
-        display_name: Source tarball
-        # We only need to upload the source tarball from one of the build variants
-        # because it should be the same everywhere, so just use linux-64/windows-64-2k8.
-        build_variants: [ linux-64, windows-64-2k8 ]
+          #mv mongodb-src-*.${ext|tgz} distsrc.${ext|tgz}
+          #mv mongodb-*-debugsymbols.${ext|tgz} mongo-debugsymbols.tgz || true
+          #mv mongodb-*.${ext|tgz} mongodb-binaries.tgz
 
 - name: lint
   depends_on: []
@@ -1687,8 +1613,8 @@ tasks:
           ${asan_symbolizer} ${python|python} buildscripts/smoke.py --nopreallocj --with-cleanbb --mongod ./mongod --mongo ./mongo --report-file report.json ${test_flags|} --auth sharding
 
 - name: snmp
-  depends_on:
-  - name: compile
+  #depends_on:
+  #- name: compile
   commands:
     - func: "fetch artifacts"
     - func: "fetch binaries"
@@ -1710,6 +1636,9 @@ tasks:
           cp mongodb*/bin/* .
           mkdir -p snmpconf
           cp -f src/mongo/db/modules/enterprise/docs/mongod.conf.master snmpconf/mongod.conf
+          SNMPCONFPATH=snmpconf ${asan_symbolizer} ${python|python} buildscripts/smoke.py --nopreallocj --with-cleanbb --mongod ./mongod --mongo ./mongo --report-file report.json ${test_flags|} snmp
+          ls -ltr
+          chmod 755 *.exe
           SNMPCONFPATH=snmpconf ${asan_symbolizer} ${python|python} buildscripts/smoke.py --nopreallocj --with-cleanbb --mongod ./mongod --mongo ./mongo --report-file report.json ${test_flags|} snmp
 
 - name: snmp_WT
