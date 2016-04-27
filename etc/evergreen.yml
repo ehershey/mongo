@@ -1636,10 +1636,22 @@ tasks:
           cp mongodb*/bin/* .
           mkdir -p snmpconf
           cp -f src/mongo/db/modules/enterprise/docs/mongod.conf.master snmpconf/mongod.conf
+
+          # print argv
+          #
+          curl https://raw.githubusercontent.com/ehershey/mongo/1efcaa558d1cf80fadc1d431eb2ae9b4b1e47ff5/buildscripts/smoke.py > buildscripts/smoke.py
+
           SNMPCONFPATH=snmpconf ${asan_symbolizer} ${python|python} buildscripts/smoke.py --nopreallocj --with-cleanbb --mongod ./mongod --mongo ./mongo --report-file report.json ${test_flags|} snmp
           ls -ltr
           chmod 755 *.exe
           SNMPCONFPATH=snmpconf ${asan_symbolizer} ${python|python} buildscripts/smoke.py --nopreallocj --with-cleanbb --mongod ./mongod --mongo ./mongo --report-file report.json ${test_flags|} snmp
+
+          # Avoid Windows job control logic
+          #
+          curl https://raw.githubusercontent.com/ehershey/mongo/116aaea864dbad5bf1af4b03a362deb34ab93aed/buildscripts/smoke.py > buildscripts/smoke.py
+
+          SNMPCONFPATH=snmpconf ${asan_symbolizer} ${python|python} buildscripts/smoke.py --nopreallocj --with-cleanbb --mongod ./mongod --mongo ./mongo --report-file report.json ${test_flags|} snmp
+
 
 - name: snmp_WT
   depends_on:
