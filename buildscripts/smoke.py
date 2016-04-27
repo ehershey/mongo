@@ -282,7 +282,9 @@ class mongod(NullMongod):
         call to TerminateJobObject (see self.stop()).
         """
 
-        if os.sys.platform == "win32":
+        print("argv: ")
+        print(argv)
+        if 0 && os.sys.platform == "win32":
             # Create a job object with the "kill on job close"
             # flag; this is inherited by child processes (ie
             # the mongod started on our behalf by buildlogger)
@@ -294,8 +296,6 @@ class mongod(NullMongod):
             # see: MSDN - Process Creation Flags - ms684863
             CREATE_BREAKAWAY_FROM_JOB = 0x01000000
 
-            print("argv: ")
-            print(argv)
             proc = Popen(argv, creationflags=CREATE_BREAKAWAY_FROM_JOB)
 
             self.job_object = win32job.CreateJobObject(None, '')
