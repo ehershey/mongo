@@ -284,7 +284,7 @@ class mongod(NullMongod):
 
         print("argv: ")
         print(argv)
-        if 0 && os.sys.platform == "win32":
+        if False and os.sys.platform == "win32":
             # Create a job object with the "kill on job close"
             # flag; this is inherited by child processes (ie
             # the mongod started on our behalf by buildlogger)
