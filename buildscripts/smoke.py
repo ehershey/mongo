@@ -284,13 +284,19 @@ class mongod(NullMongod):
 
         print("argv: ")
         print(argv)
-        if False and os.sys.platform == "win32":
+        if os.sys.platform == "win32":
             # Create a job object with the "kill on job close"
             # flag; this is inherited by child processes (ie
             # the mongod started on our behalf by buildlogger)
             # and lets us terminate the whole tree of processes
             # rather than orphaning the mongod.
             import win32job
+            import win32process
+
+            if win32job.IsProcessInJob(win32process.GetCurrentProcess(), None):
+              print("YES in job object")
+            else:
+              print("NO not in job object")
 
             # Magic number needed to allow job reassignment in Windows 7
             # see: MSDN - Process Creation Flags - ms684863
