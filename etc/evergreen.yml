@@ -1975,7 +1975,7 @@ tasks:
           /usr/bin/find build/ -type f | grep msi$ | xargs -I original_filename cp original_filename mongodb-win32-${push_arch}-${suffix}.msi || true
 
           # Extract shell and shell debugsymbols out of scons-made archive for new archives
-          ${decompress} mongodb-binaries.${ext|tgz} \*/mongo{exe}
+          ${decompress} mongodb-binaries.${ext|tgz} \*/mongo${exe}
           ${decompress} debugsymbols-*.${ext|tgz} \*/mongo.debug || true
 
           ${python|python} buildscripts/make_archive.py -o mongodb-shell-${push_name}-${push_arch}-${suffix}.${ext|tgz} */mongo${exe}
