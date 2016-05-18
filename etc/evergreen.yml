@@ -1975,11 +1975,13 @@ tasks:
           /usr/bin/find build/ -type f | grep msi$ | xargs -I original_filename cp original_filename mongodb-win32-${push_arch}-${suffix}.msi || true
 
           # Extract shell and shell debugsymbols out of scons-made archive for new archives
-          ${decompress} mongodb-binaries.${ext|tgz} \*/mongo${exe}
-          ${decompress} debugsymbols-*.${ext|tgz} \*/mongo.debug || true
+          ${platform_decompress|tar zxvf} mongodb-binaries.${ext|tgz} \*/bin/mongo${exe}
+          ${platform_decompress|tar zxvf} debugsymbols-*.${ext|tgz} \*/mongo.{debug,dSYM} || true
 
-          ${python|python} buildscripts/make_archive.py -o mongodb-shell-${push_name}-${push_arch}-${suffix}.${ext|tgz} */mongo${exe}
-          ${python|python} buildscripts/make_archive.py -o mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz} */mongo.debug || true
+          # Create new shell and shell debugsymbols archives (make_archive.py uses filename to determine what format archive to create)
+          # For debug symbols, Linux uses .debug files; OS X uses .dSYM directories
+          ${python|python} buildscripts/make_archive.py -o mongodb-shell-${push_name}-${push_arch}-${suffix}.${ext|tgz} */bin/mongo${exe}
+          ${python|python} buildscripts/make_archive.py -o mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz} $(ls -d */mongo.{debug,dSYM}) || true
 
           notary-client.py --key-name "server-3.4" --auth-token-file ${workdir}/src/signing_auth_token --comment "Evergreen Automatic Signing ${revision} - ${build_variant} - ${branch_name}" --notary-url http://notary-service.build.10gen.cc:5000 --skip-missing mongodb-${push_name}-${push_arch}-${suffix}.${ext|tgz} mongodb-shell-${push_name}-${push_arch}-${suffix}.${ext|tgz} mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz} mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz} mongodb-win32-${push_arch}-${suffix}.msi mongodb-src-${src_suffix}.${ext|tar.gz}
 
@@ -3330,6 +3332,7 @@ buildvariants:
   - windows-64-vs2015-test
   batchtime: 1440 # 1 day
   expansions:
+    platform_decompress: unzip
     exe: ".exe"
     push_path: win32
     push_bucket: downloads.mongodb.org
@@ -3430,6 +3433,7 @@ buildvariants:
   - windows-64-vs2015-test
   batchtime: 1440 # 1 day
   expansions:
+    platform_decompress: unzip
     exe: ".exe"
     push_path: win32
     push_bucket: downloads.mongodb.org
@@ -3534,6 +3538,7 @@ buildvariants:
   run_on:
   - windows-64-vs2015-test
   expansions:
+    platform_decompress: unzip
     exe: ".exe"
     push_path: win32
     push_bucket: downloads.mongodb.org
@@ -3628,6 +3633,7 @@ buildvariants:
   run_on:
   - windows-64-vs2015-test
   expansions:
+    platform_decompress: unzip
     tooltags: "-tags 'ssl sasl'"
     exe: ".exe"
     gorootvars: 'PATH="/cygdrive/c/mingw-w64/x86_64-4.9.1-posix-seh-rt_v3-rev1/mingw64/bin:/cygdrive/c/sasl/:$PATH"'
@@ -3685,6 +3691,7 @@ buildvariants:
   - windows-64-vs2015-test
   batchtime: 1440 # 1 day
   expansions:
+    platform_decompress: unzip
     tooltags: "-tags 'ssl sasl'"
     exe: ".exe"
     gorootvars: 'PATH="/cygdrive/c/mingw-w64/x86_64-4.9.1-posix-seh-rt_v3-rev1/mingw64/bin:/cygdrive/c/sasl/:$PATH"'
@@ -3735,6 +3742,7 @@ buildvariants:
   - windows-64-vs2015-test
   batchtime: 1440 # 1 day
   expansions:
+    platform_decompress: unzip
     exe: ".exe"
     gorootvars: 'PATH="/cygdrive/c/mingw-w64/x86_64-4.9.1-posix-seh-rt_v3-rev1/mingw64/bin:/cygdrive/c/sasl/:$PATH"'
     tooltags: "-tags ssl"
