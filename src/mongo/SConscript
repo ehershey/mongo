@@ -391,7 +391,7 @@ else:
 
 distBinaries = []
 distDebugSymbols = []
-distShell = [add_exe("mongo")]
+distShell = []
 
 def add_exe( v ):
     return "${PROGPREFIX}%s${PROGSUFFIX}" % v
@@ -560,11 +560,11 @@ env.Alias('dist-debugsymbols', debug_symbols_dist)
 
 shell_dist = env.Command(
     target='#/${SERVER_DIST_BASENAME}-shell${DIST_ARCHIVE_SUFFIX}',
-    source=['#buildscripts/make_archive.py'] + env["MODULE_BANNERS"] + distShell,
+    source=['#buildscripts/make_archive.py'] + env["MODULE_BANNERS"] + [exe for exe in distBinaries if re.search(r'\bmongo\b', exe) ],
     action=' '.join(
+        ['$PYTHON ${SOURCES[0]} -o $TARGET'] +
+        module_banner_transforms +
         [
-            '$PYTHON ${SOURCES[0]} -o $TARGET',
-            module_banner_transforms +
             '--transform $BUILD_DIR/mongo/db/modules/enterprise=$SERVER_DIST_BASENAME',
             '--transform $BUILD_DIR/mongo=$SERVER_DIST_BASENAME',
             '${TEMPFILE(SOURCES[1:])}',
