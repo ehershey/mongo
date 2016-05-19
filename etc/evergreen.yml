@@ -234,6 +234,27 @@ functions:
       build_variants:
         *debug_symbol_variants
 
+  "upload shell" :
+    command: s3.put
+    params:
+      aws_key: ${aws_key}
+      aws_secret: ${aws_secret}
+      local_file: src/mongo-shell.tgz
+      remote_file: mongodb-mongo-master/${build_variant}/${revision}/shell/shell-${build_id}.${ext|tgz}
+      bucket: mciuploads
+      permissions: public-read
+      content_type: ${content_type|application/x-gzip}
+
+  "fetch shell archive" :
+    command: s3.get
+    params:
+      aws_key: ${aws_key}
+      aws_secret: ${aws_secret}
+      remote_file: mongodb-mongo-master/${build_variant}/${revision}/shell/shell-${build_id}.${ext|tgz}
+      bucket: mciuploads
+      local_file: src/mongo-shell.tgz
+
+
   "build rocksdb" :
     command: shell.exec
     params:
@@ -631,10 +652,11 @@ tasks:
           set -o verbose
 
           rm -rf ${install_directory|/data/mongo-install-directory}
-          ${scons|scons} ${compile_flags|} --use-new-tools all dist dist-debugsymbols distsrc-${ext|tgz} ${msi_target|} MONGO_VERSION=${version}
+          ${scons|scons} ${compile_flags|} --use-new-tools all dist dist-debugsymbols dist-shell distsrc-${ext|tgz} ${msi_target|} MONGO_VERSION=${version}
 
           mv mongodb-src-*.${ext|tgz} distsrc.${ext|tgz}
           mv mongodb-*-debugsymbols.${ext|tgz} mongo-debugsymbols.tgz || true
+          mv mongodb-*-shell.${ext|tgz} mongo-shell.tgz
           mv mongodb-*.${ext|tgz} mongodb-binaries.tgz
 
           # If strip is on the path (everywhere except windows) then we should strip the test binaries
@@ -688,6 +710,7 @@ tasks:
         exclude_files:
           - "*_test.pdb"
     - func: "upload debugsymbols"
+    - func: "upload shell"
     - command: s3.put
       params:
         aws_key: ${aws_key}
@@ -1954,6 +1977,7 @@ tasks:
       params:
         file: src/compile_expansions.yml
     - func: "fetch debugsymbols archive"
+    - func: "fetch shell archive"
     - command: shell.exec
       params:
         working_dir: src
@@ -1969,21 +1993,14 @@ tasks:
           set -o verbose
           mv mongo-binaries.tgz mongodb-binaries.${ext|tgz}
           mv mongo-debugsymbols.tgz debugsymbols-*.${ext|tgz} || true
+          mv mongo-shell.tgz shell-*.${ext|tgz}
           cp mongodb-*.${ext|tgz} mongodb-${push_name}-${push_arch}-${suffix}.${ext|tgz}
           cp debugsymbols-*.${ext|tgz} mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz} || true
+          cp shell-*.${ext|tgz} mongodb-shell-${push_name}-${push_arch}-${suffix}.${ext|tgz}
           mv distsrc.${ext|tgz} mongodb-src-${src_suffix}.${ext|tar.gz} || true
           /usr/bin/find build/ -type f | grep msi$ | xargs -I original_filename cp original_filename mongodb-win32-${push_arch}-${suffix}.msi || true
 
-          # Extract shell and shell debugsymbols out of scons-made archive for new archives
-          ${platform_decompress|tar zxvf} mongodb-binaries.${ext|tgz} \*/bin/mongo${exe}
-          ${platform_decompress|tar zxvf} debugsymbols-*.${ext|tgz} \*/mongo.{debug,dSYM} || true
-
-          # Create new shell and shell debugsymbols archives (make_archive.py uses filename to determine what format archive to create)
-          # For debug symbols, Linux uses .debug files; OS X uses .dSYM directories
-          ${python|python} buildscripts/make_archive.py -o mongodb-shell-${push_name}-${push_arch}-${suffix}.${ext|tgz} */bin/mongo${exe}
-          ${python|python} buildscripts/make_archive.py -o mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz} $(ls -d */mongo.{debug,dSYM}) || true
-
-          notary-client.py --key-name "server-3.4" --auth-token-file ${workdir}/src/signing_auth_token --comment "Evergreen Automatic Signing ${revision} - ${build_variant} - ${branch_name}" --notary-url http://notary-service.build.10gen.cc:5000 --skip-missing mongodb-${push_name}-${push_arch}-${suffix}.${ext|tgz} mongodb-shell-${push_name}-${push_arch}-${suffix}.${ext|tgz} mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz} mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz} mongodb-win32-${push_arch}-${suffix}.msi mongodb-src-${src_suffix}.${ext|tar.gz}
+          notary-client.py --key-name "server-3.4" --auth-token-file ${workdir}/src/signing_auth_token --comment "Evergreen Automatic Signing ${revision} - ${build_variant} - ${branch_name}" --notary-url http://notary-service.build.10gen.cc:5000 --skip-missing mongodb-${push_name}-${push_arch}-${suffix}.${ext|tgz} mongodb-shell-${push_name}-${push_arch}-${suffix}.${ext|tgz} mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz} mongodb-win32-${push_arch}-${suffix}.msi mongodb-src-${src_suffix}.${ext|tar.gz}
 
           if [ "${has_packages|}" = "true" ] ; then
             for rpm in $(find repo/ -name \*.rpm) ; do
@@ -2045,17 +2062,6 @@ tasks:
         bucket: build-push-testing
         content_type: ${content_type|application/x-gzip}
         remote_file: ${push_path}-STAGE/${push_name}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}
-    # Put the shell debug symbols
-    - command: s3.put
-      params:
-        aws_secret: ${aws_secret}
-        aws_key: ${aws_key}
-        build_variants: *debug_symbol_variants
-        permissions: public-read
-        local_file: src/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}
-        bucket: build-push-testing
-        content_type: ${content_type|application/x-gzip}
-        remote_file: ${push_path}-STAGE/${push_name}/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}
 
 
     # Put the binaries tarball signature
@@ -2103,17 +2109,6 @@ tasks:
         bucket: build-push-testing
         content_type: ${content_type|application/x-gzip}
         remote_file: ${push_path}-STAGE/${push_name}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.sig
-    # Put the debug symbols signature
-    - command: s3.put
-      params:
-        aws_secret: ${aws_secret}
-        aws_key: ${aws_key}
-        build_variants: *debug_symbol_variants
-        permissions: public-read
-        local_file: src/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.sig
-        bucket: build-push-testing
-        content_type: ${content_type|application/x-gzip}
-        remote_file: ${push_path}-STAGE/${push_name}/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.sig
 
 
 
@@ -2173,88 +2168,6 @@ tasks:
         bucket: build-push-testing
         content_type: text/plain
         remote_file: ${push_path}-STAGE/${push_name}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.sha1
-    # Put the shell debug symbols sha1
-    - command: s3.put
-      params:
-        aws_secret: ${aws_secret}
-        aws_key: ${aws_key}
-        build_variants: *debug_symbol_variants
-        permissions: public-read
-        local_file: src/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.sha1
-        bucket: build-push-testing
-        content_type: text/plain
-        remote_file: ${push_path}-STAGE/${push_name}/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.sha1
-
-
-
-    # Push the signed MSI sha1
-    - command: s3.put
-      params:
-        aws_key: ${aws_key}
-        aws_secret: ${aws_secret}
-        permissions: public-read
-        build_variants: ["enterprise-windows-64", "windows-64", "windows-64-2k8", "windows-64-2k8-ssl"]
-        local_file: src/mongodb-win32-${push_arch}-${suffix}-signed.msi.sha1
-        bucket: build-push-testing
-        content_type: text/plain
-        remote_file: ${push_path}-STAGE/${push_name}/mongodb-win32-${push_arch}-${suffix}-${task_id}-signed.msi.sha1
-
-    # Put the binaries tarball sha256
-    - command: s3.put
-      params:
-        aws_secret: ${aws_secret}
-        local_file: src/mongodb-${push_name}-${push_arch}-${suffix}.${ext|tgz}.sha256
-        permissions: public-read
-        aws_key: ${aws_key}
-        bucket: build-push-testing
-        content_type: text/plain
-        remote_file: ${push_path}-STAGE/${push_name}/mongodb-${push_name}-${push_arch}-${suffix}-${task_id}.${ext|tgz}.sha256
-    # Put the shell tarball sha256
-    - command: s3.put
-      params:
-        aws_secret: ${aws_secret}
-        local_file: src/mongodb-shell-${push_name}-${push_arch}-${suffix}.${ext|tgz}.sha256
-        permissions: public-read
-        aws_key: ${aws_key}
-        bucket: build-push-testing
-        content_type: text/plain
-        remote_file: ${push_path}-STAGE/${push_name}/mongodb-shell-${push_name}-${push_arch}-${suffix}-${task_id}.${ext|tgz}.sha256
-
-    # Put the source tarball sha256
-    - command: s3.put
-      params:
-        aws_secret: ${aws_secret}
-        local_file: src/mongodb-src-${src_suffix}.${ext|tar.gz}.sha256
-        permissions: public-read
-        aws_key: ${aws_key}
-        bucket: build-push-testing
-        content_type: text/plain
-        remote_file: ${push_path}-STAGE/${push_name}/mongodb-src-${src_suffix}-${task_id}.${ext|tar.gz}.sha256
-        build_variants: [ linux-64, windows-64-2k8 ]
-
-    # Put the debug symbols sha256
-    - command: s3.put
-      params:
-        aws_secret: ${aws_secret}
-        build_variants: *debug_symbol_variants
-        local_file: src/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.sha256
-        aws_key: ${aws_key}
-        bucket: build-push-testing
-        permissions: public-read
-        content_type: text/plain
-        remote_file: ${push_path}-STAGE/${push_name}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.sha256
-
-    # Put the shell debug symbols sha256
-    - command: s3.put
-      params:
-        aws_secret: ${aws_secret}
-        build_variants: *debug_symbol_variants
-        local_file: src/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.sha256
-        aws_key: ${aws_key}
-        bucket: build-push-testing
-        permissions: public-read
-        content_type: text/plain
-        remote_file: ${push_path}-STAGE/${push_name}/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.sha256
 
     # Put the signed MSI sha256
     - command: s3.put
@@ -2312,17 +2225,6 @@ tasks:
         content_type: text/plain
         permissions: public-read
         remote_file: ${push_path}-STAGE/${push_name}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.md5
-    # Put the shell debug symbols md5
-    - command: s3.put
-      params:
-        aws_key: ${aws_key}
-        aws_secret: ${aws_secret}
-        build_variants: *debug_symbol_variants
-        local_file: src/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.md5
-        bucket: build-push-testing
-        content_type: text/plain
-        permissions: public-read
-        remote_file: ${push_path}-STAGE/${push_name}/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.md5
 
     # Put the signed MSI md5
     - command: s3.put
@@ -2379,12 +2281,6 @@ tasks:
                'build_variants': *debug_symbol_variants
               }
 
-            #Shell Debug Symbols
-            - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}', 'bucket': 'build-push-testing'},
-               'destination': {'path': '${push_path}/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}', 'bucket': '${push_bucket}'},
-               'build_variants': *debug_symbol_variants
-              }
-
             #MSI (Windows only)
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-win32-${push_arch}-${suffix}-${task_id}-signed.msi', 'bucket': 'build-push-testing'},
                'destination': {'path': '${push_path}/mongodb-win32-${push_arch}-${suffix}-signed.msi', 'bucket': '${push_bucket}'},
@@ -2401,12 +2297,6 @@ tasks:
             #Debug Symbols Signature
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.sig', 'bucket': 'build-push-testing'},
                'destination': {'path': '${push_path}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.sig', 'bucket': '${push_bucket}'},
-               'build_variants': *debug_symbol_variants
-              }
-
-            #Shell Debug Symbols Signature
-            - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.sig', 'bucket': 'build-push-testing'},
-               'destination': {'path': '${push_path}/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.sig', 'bucket': '${push_bucket}'},
                'build_variants': *debug_symbol_variants
               }
 
@@ -2436,12 +2326,6 @@ tasks:
                'build_variants': *debug_symbol_variants
               }
 
-            #SHA1 for shell debug symbols
-            - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.sha1', 'bucket': 'build-push-testing'},
-               'destination': {'path': '${push_path}/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.sha1', 'bucket': '${push_bucket}'},
-               'build_variants': *debug_symbol_variants
-              }
-
             #SHA1 for MSI
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-win32-${push_arch}-${suffix}-${task_id}-signed.msi.sha1', 'bucket': 'build-push-testing'},
                'destination': {'path': '${push_path}/mongodb-win32-${push_arch}-${suffix}-signed.msi.sha1', 'bucket': '${push_bucket}'},
@@ -2464,11 +2348,6 @@ tasks:
             #SHA256 for debugsymbols
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.sha256', 'bucket': 'build-push-testing'},
                'destination': {'path': '${push_path}/mongodb-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.sha256', 'bucket': '${push_bucket}'},
-               'build_variants': *debug_symbol_variants}
-
-            #SHA256 for shell debugsymbols
-            - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.sha256', 'bucket': 'build-push-testing'},
-               'destination': {'path': '${push_path}/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.sha256', 'bucket': '${push_bucket}'},
                'build_variants': *debug_symbol_variants}
 
             #SHA256 for MSI files
@@ -2497,11 +2376,6 @@ tasks:
                'build_variants': *debug_symbol_variants
                 }
 
-            #MD5 for shell debugsymbols
-            - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}-${task_id}.${ext|tgz}.md5', 'bucket': 'build-push-testing'},
-               'destination': {'path': '${push_path}/mongodb-shell-${push_name}-${push_arch}-debugsymbols-${suffix}.${ext|tgz}.md5', 'bucket': '${push_bucket}'},
-               'build_variants': *debug_symbol_variants
-                }
 
             #MD5 for MSIs
             - {'source': {'path': '${push_path}-STAGE/${push_name}/mongodb-win32-${push_arch}-${suffix}-${task_id}-signed.msi.md5', 'bucket': 'build-push-testing'},
