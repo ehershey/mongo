@@ -275,12 +275,9 @@ functions:
         set -o verbose
         set -o errexit
 
-        # create the target directory for the binaries
-        mkdir -p src/mongo-tools
+        # move source repo to new location so we can build into src/mongo-tools
+        mv src/mongo-tools src/mongo-tools-repo
 
-        # clone into a different path so the binaries and package directory
-        # names do not conflict
-        ${gitvars} git clone https://github.com/mongodb/mongo-tools.git src/mongo-tools-repo
         cd src/mongo-tools-repo
 
         # make sure newlines in the scripts are handled correctly by windows
@@ -288,7 +285,6 @@ functions:
             set -o igncr
         fi;
 
-        git checkout v3.3
         . ./${set_tools_gopath|set_gopath.sh}
 
         for i in bsondump mongostat mongofiles mongoexport mongoimport mongorestore mongodump mongotop mongooplog; do
@@ -650,6 +646,7 @@ tasks:
         directory: src
         revisions: # for each module include revision as <module_name> : ${<module_name>_rev}
           enterprise: ${enterprise_rev}
+          mongo-tools: ${mongo-tools_rev}
           rocksdb: ${rocksdb_rev}
     - command: git.apply_patch
       params:
@@ -803,6 +800,7 @@ tasks:
         directory: src
         revisions: # for each module include revision as <module_name> : ${<module_name>_rev}
           enterprise: ${enterprise_rev}
+          mongo-tools: ${mongo-tools_rev}
           rocksdb: ${rocksdb_rev}
     - command: git.apply_patch
       params:
@@ -2512,6 +2510,11 @@ modules:
   prefix: src/mongo/db/modules
   branch: master
 
+- name: mongo-tools
+  repo: git@github.com:mongodb/mongo-tools.git
+  prefix: src
+  branch: v3.3
+
 - name: rocksdb
   repo: git@github.com:mongodb-partners/mongo-rocks.git
   prefix: src/mongo/db/modules
@@ -2529,7 +2532,8 @@ buildvariants:
 
 - name: linux-64
   display_name: Linux
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - rhel55
   - rhel55-test
@@ -2663,7 +2667,8 @@ buildvariants:
 - name: linux-64-repeated-execution
   stepback: false
   display_name: ~ Linux Repeated Execution
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - rhel55-test
   batchtime: 1440 # 1 day
@@ -2694,7 +2699,8 @@ buildvariants:
 
 - name: linux-64-debug
   display_name: Linux DEBUG
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - rhel55
   - rhel55-test
@@ -2799,7 +2805,8 @@ buildvariants:
 
 - name: linux-64-duroff
   display_name: Linux (No Journal)
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - rhel55
   - rhel55-test
@@ -2938,7 +2945,8 @@ buildvariants:
 
 - name: ubuntu1204
   display_name: SSL Ubuntu 12.04
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - ubuntu1204-test
   batchtime: 1440 # 1 day
@@ -3047,7 +3055,8 @@ buildvariants:
 
 - name: ubuntu1404
   display_name: SSL Ubuntu 14.04
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - ubuntu1404-test
   batchtime: 1440 # 1 day
@@ -3160,7 +3169,8 @@ buildvariants:
 
 - name: ubuntu1604
   display_name: SSL Ubuntu 16.04
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - ubuntu1604-test
   batchtime: 1440 # 1 day
@@ -3272,6 +3282,7 @@ buildvariants:
   display_name: "* Enterprise Amazon Linux"
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - linux-64-amzn-test
   expansions:
@@ -3347,7 +3358,8 @@ buildvariants:
 
 - name: amazon
   display_name: SSL Amazon Linux
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - linux-64-amzn-test
   batchtime: 1440 # 1 day
@@ -3463,7 +3475,8 @@ buildvariants:
 
 - name: windows-64
   display_name: Windows Vista
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - windows-64-vs2015-test
   batchtime: 1440 # 1 day
@@ -3564,7 +3577,8 @@ buildvariants:
 
 - name: windows-64-2k8
   display_name: Windows 2008R2
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - windows-64-vs2015-test
   batchtime: 1440 # 1 day
@@ -3670,7 +3684,8 @@ buildvariants:
 
 - name: windows-64-2k8-debug
   display_name: "* Windows 2008R2 DEBUG"
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - windows-64-vs2015-test
   expansions:
@@ -3766,6 +3781,7 @@ buildvariants:
   display_name: "* Enterprise Windows"
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - windows-64-vs2015-test
   expansions:
@@ -3823,6 +3839,7 @@ buildvariants:
   display_name: Enterprise Windows (inMemory)
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - windows-64-vs2015-test
   batchtime: 1440 # 1 day
@@ -3873,7 +3890,8 @@ buildvariants:
 
 - name: windows-64-2k8-ssl
   display_name: SSL Windows 2008R2
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - windows-64-vs2015-test
   batchtime: 1440 # 1 day
@@ -3970,7 +3988,8 @@ buildvariants:
 
 - name: osx-107
   display_name: OS X 10.7
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - osx-1010
   batchtime: 1440 # 1 day
@@ -4063,7 +4082,8 @@ buildvariants:
 
 - name: osx-107-ssl
   display_name: SSL OS X 10.7
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - osx-1010
   batchtime: 1440 # 1 day
@@ -4157,7 +4177,8 @@ buildvariants:
 
 - name: osx-107-debug
   display_name: "* OS X 10.7 DEBUG"
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - osx-1010
   expansions:
@@ -4198,6 +4219,7 @@ buildvariants:
   display_name: Enterprise OS X 10.7
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - osx-1010
   batchtime: 1440 # 1 day
@@ -4246,6 +4268,7 @@ buildvariants:
   display_name: Enterprise RHEL 5.7
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - rhel55-test
   batchtime: 1440 # 1 day
@@ -4297,6 +4320,7 @@ buildvariants:
   display_name: "* Enterprise RHEL 6.2"
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - rhel62-test
   expansions:
@@ -4442,6 +4466,7 @@ buildvariants:
   display_name: Enterprise RHEL 7.0
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - rhel70
   batchtime: 1440 # 1 day
@@ -4488,7 +4513,8 @@ buildvariants:
 
 - name: rhel55
   display_name: SSL RHEL 5.5
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - rhel55
   - rhel55-test
@@ -4613,7 +4639,8 @@ buildvariants:
 
 - name: rhel62
   display_name: SSL RHEL 6.2
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - rhel62-test
   batchtime: 1440 # 1 day
@@ -4723,7 +4750,8 @@ buildvariants:
 
 - name: rhel70
   display_name: SSL RHEL 7.0
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - rhel70
   batchtime: 1440 # 1 day
@@ -4835,6 +4863,7 @@ buildvariants:
   display_name: Enterprise RHEL 7.1 PPC64LE
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - rhel71-power8-build
   - rhel71-power8-test
@@ -4968,6 +4997,7 @@ buildvariants:
   display_name: Enterprise RHEL 7.2 s390x
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - rhel72-zseries-build
   - rhel72-zseries-test
@@ -5104,6 +5134,7 @@ buildvariants:
   display_name: Enterprise Ubuntu 12.04
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - ubuntu1204-test
   batchtime: 1440 # 1 day
@@ -5154,6 +5185,7 @@ buildvariants:
   display_name: Enterprise Ubuntu 14.04
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - ubuntu1404-test
   batchtime: 1440 # 1 day
@@ -5207,6 +5239,7 @@ buildvariants:
   display_name: Enterprise Ubuntu 16.04
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - ubuntu1604-test
   batchtime: 1440 # 1 day
@@ -5263,6 +5296,7 @@ buildvariants:
   display_name: Enterprise SLES 12
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - suse12-test
   batchtime: 1440 # 1 day
@@ -5311,7 +5345,8 @@ buildvariants:
 
 - name: suse12
   display_name: SSL SUSE 12
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - suse12-test
   batchtime: 1440 # 1 day
@@ -5421,6 +5456,7 @@ buildvariants:
   display_name: Enterprise SLES 11
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - suse11-test
   batchtime: 1440 # 1 day
@@ -5469,7 +5505,8 @@ buildvariants:
 
 - name: suse11
   display_name: SSL SUSE 11
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - suse11-test
   batchtime: 1440 # 1 day
@@ -5581,7 +5618,8 @@ buildvariants:
 
 - name: solaris-64-bit
   display_name: "* Solaris"
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - solaris
   expansions:
@@ -5663,6 +5701,7 @@ buildvariants:
   display_name: Enterprise Debian 7.1
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - debian71-test
   batchtime: 1440 # 1 day
@@ -5713,6 +5752,7 @@ buildvariants:
   display_name: Enterprise Debian 8.1
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - debian81-test
   batchtime: 1440 # 1 day
@@ -5762,7 +5802,8 @@ buildvariants:
 
 - name: debian71
   display_name: SSL Debian 7.1
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - debian71-test
   batchtime: 1440 # 1 day
@@ -5874,7 +5915,8 @@ buildvariants:
 
 - name: debian81
   display_name: SSL Debian 8.1
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - debian81-test
   batchtime: 1440 # 1 day
@@ -5992,6 +6034,7 @@ buildvariants:
   display_name: Enterprise RHEL 6.2 (inMemory)
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - rhel62-test
   batchtime: 1440 # 1 day
@@ -6074,7 +6117,8 @@ buildvariants:
 
 - name: linux-64-ephemeralForTest
   display_name: Linux (ephemeralForTest)
-  modules: ~
+  modules:
+  - mongo-tools
   run_on:
   - rhel55
   - rhel55-test
@@ -6157,6 +6201,7 @@ buildvariants:
   display_name: Enterprise RHEL 7.1 PPC64LE (inMemory) DEBUG
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - rhel71-power8-build
   - rhel71-power8-test
@@ -6233,6 +6278,7 @@ buildvariants:
   display_name: Enterprise RHEL 7.2 s390x (inMemory) DEBUG
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - rhel72-zseries-build
   - rhel72-zseries-test
@@ -6316,6 +6362,7 @@ buildvariants:
   display_name: Ubuntu 14.04 (RocksDB)
   modules:
   - rocksdb
+  - mongo-tools
   run_on:
   - ubuntu1404-test
   batchtime: 1440 # 1 day
@@ -6381,6 +6428,7 @@ buildvariants:
   display_name: ~ ASAN Enterprise SSL Ubuntu 14.10 DEBUG
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - ubuntu1410-build
   stepback: true
@@ -6528,6 +6576,7 @@ buildvariants:
   display_name: ~ UBSAN Enterprise Debian 8.1 DEBUG
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - debian81-test
   stepback: true
@@ -6761,6 +6810,7 @@ buildvariants:
   display_name: "* Shared Library Enterprise Ubuntu 16.04"
   modules:
   - enterprise
+  - mongo-tools
   expansions:
     gorootvars: GOROOT=/opt/go PATH="/opt/go/bin:$PATH"
     tooltags: "-tags 'ssl sasl'"
@@ -6775,6 +6825,7 @@ buildvariants:
   display_name: ~ Enterprise RHEL 6.2 C++14 DEBUG
   modules:
   - enterprise
+  - mongo-tools
   run_on:
   - rhel62-test
   batchtime: 1440 # 1 day
